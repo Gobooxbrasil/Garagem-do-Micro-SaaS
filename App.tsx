@@ -8,6 +8,7 @@ import ProjectDetail from './components/ProjectDetail';
 import NewProjectModal from './components/NewProjectModal';
 import NewIdeaModal from './components/NewIdeaModal';
 import AuthModal from './components/AuthModal';
+import LandingPage from './components/LandingPage';
 import { 
   Layers, 
   Plus, 
@@ -25,7 +26,7 @@ import {
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
-  const [viewState, setViewState] = useState<ViewState>({ type: 'IDEAS' });
+  const [viewState, setViewState] = useState<ViewState>({ type: 'LANDING' });
   
   // DATA STATES (Now fetching from DB or Fallback to Constants)
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -47,6 +48,13 @@ const App: React.FC = () => {
     // Check Active Session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      // If session exists on load, we can optionally stay on landing or go to app.
+      // For better UX, if they are logged in, usually we might want to show them the app,
+      // but let's keep the landing page as the "home" unless they navigate.
+      // However, if they just logged in via a refresh, maybe showing the app is better.
+      if (session) {
+         setViewState({ type: 'IDEAS' });
+      }
     });
 
     // Listen for Auth Changes
@@ -54,6 +62,13 @@ const App: React.FC = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) {
+          // When logging in, go to Ideas
+          setViewState(prev => prev.type === 'LANDING' ? { type: 'IDEAS' } : prev);
+      } else {
+          // When logging out, go to Landing
+          setViewState({ type: 'LANDING' });
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -61,6 +76,10 @@ const App: React.FC = () => {
 
   // ================= EFFECT 2: DATA FETCHING (Run on Session Change) =================
   useEffect(() => {
+    // Only fetch data if we are NOT in landing page (or pre-fetch if you want)
+    // But to save resources, let's fetch when session changes AND we are in app mode
+    // actually, we need data for the app views.
+    
     const fetchData = async () => {
       setIsLoading(true);
       
@@ -119,8 +138,10 @@ const App: React.FC = () => {
       setIsLoading(false);
     };
 
-    fetchData();
-  }, [session]); // Re-fetch data (mainly for favorites) when session changes
+    if (viewState.type !== 'LANDING') {
+        fetchData();
+    }
+  }, [session, viewState.type]); // Re-fetch when session changes or we leave landing page
 
   // ================= HELPERS =================
   const requireAuth = () => {
@@ -300,9 +321,9 @@ const App: React.FC = () => {
     }
   };
 
-  // ================= RENDER =================
+  // ================= RENDER CONTENT HELPERS =================
   const renderContent = () => {
-    if (isLoading) {
+    if (isLoading && viewState.type !== 'LANDING') {
         return (
             <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
@@ -439,6 +460,30 @@ const App: React.FC = () => {
       );
     }
   };
+
+  // ================= RENDER MAIN =================
+
+  if (viewState.type === 'LANDING') {
+      return (
+          <>
+             <LandingPage 
+                onEnter={() => {
+                    if (session) {
+                        setViewState({ type: 'IDEAS' });
+                    } else {
+                        setIsAuthModalOpen(true);
+                    }
+                }}
+                onLogin={() => setIsAuthModalOpen(true)}
+                isLoggedIn={!!session}
+             />
+             <AuthModal 
+                isOpen={isAuthModalOpen} 
+                onClose={() => setIsAuthModalOpen(false)} 
+             />
+          </>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-apple-bg text-apple-text font-sans flex flex-col selection:bg-apple-blue selection:text-white">

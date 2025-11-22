@@ -41,6 +41,7 @@ export interface Project {
 }
 
 export type ViewState = 
+  | { type: 'LANDING' }
   | { type: 'IDEAS' }
   | { type: 'SHOWROOM' }
   | { type: 'PROJECT_DETAIL'; projectId: string };
