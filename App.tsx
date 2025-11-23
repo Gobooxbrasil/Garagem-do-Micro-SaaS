@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabaseClient';
-import { ViewState, Idea, Project, Review, Notification } from './types';
+import { ViewState, Idea, Project, Notification } from './types';
 import { INITIAL_IDEAS, INITIAL_PROJECTS } from './constants';
 import IdeaCard from './components/IdeaCard';
 import ProjectCard from './components/ProjectCard';
@@ -12,31 +12,29 @@ import IdeaDetailModal from './components/IdeaDetailModal';
 import AuthModal from './components/AuthModal';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import LandingPage from './components/LandingPage';
-import ProfileView from './components/ProfileView'; // Import ProfileView
+import ProfileView from './components/ProfileView'; 
 import { 
   Layers, 
   Plus, 
-  Github, 
   LayoutGrid, 
   List as ListIcon, 
-  Filter, 
   ChevronDown,
-  Calendar,
-  TrendingUp,
   Lightbulb,
   LogOut,
   UserCircle,
   Search,
   Heart,
   XCircle,
-  AlertTriangle,
   Database,
   RefreshCw,
   Settings,
   User,
   Bell,
   MessageSquare,
-  UserCog
+  UserCog,
+  WifiOff,
+  AlertOctagon,
+  Settings2
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -50,9 +48,11 @@ const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // ERROR / OFFLINE STATES
   const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [dbError, setDbError] = useState<string | null>(null);
-  const [configError, setConfigError] = useState(false);
+  const [errorType, setErrorType] = useState<'NONE' | 'CONNECTION' | 'MISSING_TABLES' | 'AUTH_ERROR'>('NONE');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // MODAL STATES
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -107,6 +107,7 @@ const App: React.FC = () => {
 
   // ================= NOTIFICATIONS & USER LOGIC =================
   const fetchNotifications = async (userId: string) => {
+      if (isOfflineMode) return;
       try {
           const { data, error } = await supabase
             .from('notifications')
@@ -118,11 +119,12 @@ const App: React.FC = () => {
               setNotifications(data);
           }
       } catch (err) {
-          console.error("Erro ao buscar notificações:", err);
+          console.error("Erro ao buscar notificações (ignorado em modo offline)");
       }
   };
 
   const fetchUserAvatar = async (userId: string) => {
+      if (isOfflineMode) return;
       try {
           const { data } = await supabase
             .from('profiles')
@@ -139,9 +141,10 @@ const App: React.FC = () => {
   };
 
   const markNotificationAsRead = async (id: string) => {
-      // Otimistic Update
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-      await supabase.from('notifications').update({ read: true }).eq('id', id);
+      if (!isOfflineMode) {
+        await supabase.from('notifications').update({ read: true }).eq('id', id);
+      }
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -150,8 +153,8 @@ const App: React.FC = () => {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setIsOfflineMode(false);
-    setDbError(null);
-    setConfigError(false);
+    setErrorType('NONE');
+    setErrorMessage(null);
     
     try {
       // --- FETCH IDEAS ---
@@ -165,7 +168,6 @@ const App: React.FC = () => {
 
       let ideasWithFavs = ideasData || [];
       
-      // Correção: Se o banco retornar vazio, limpamos a lista explicitamente
       if (ideasWithFavs.length === 0) {
          setIdeas([]); 
       } else {
@@ -185,28 +187,7 @@ const App: React.FC = () => {
          }
          setIdeas(ideasWithFavs);
       }
-    } catch (error: any) {
-      console.warn("Erro ao buscar dados:", error);
-      setIsOfflineMode(true);
       
-      // Detecção de erro de configuração (URL padrão ou inválida)
-      const isUrlError = error.message && (error.message.includes('Failed to fetch') || error.message.includes('URL') || error.code === 'PGRST301');
-      
-      if (isUrlError) {
-          setConfigError(true);
-          setDbError("Conexão recusada. Verifique o arquivo 'lib/supabaseClient.ts'.");
-          setIdeas(INITIAL_IDEAS); // Mantém fallback para erro de conexão
-      } else if (error.code === '42P01') {
-          // ERRO: Tabela não encontrada (Usuário deletou as tabelas)
-          setDbError("Tabelas não encontradas no Supabase. Rode o Script SQL para recriá-las.");
-          setIdeas([]); // NÃO mostra dados fictícios, mostra vazio para o dev saber que deletou
-      } else {
-          setDbError(error.message);
-          setIdeas(INITIAL_IDEAS);
-      }
-    }
-
-    try {
       // --- FETCH PROJECTS ---
       const { data: projectsData, error: projError } = await supabase
         .from('projects')
@@ -218,17 +199,30 @@ const App: React.FC = () => {
       if (projectsData && projectsData.length > 0) {
           setProjects(projectsData);
       } else {
-          setProjects([]); // Limpa se vazio
+          setProjects([]);
       }
 
     } catch (error: any) {
-      if (!isOfflineMode) setIsOfflineMode(true);
+      console.warn("Erro ao buscar dados.", error);
+      setIsOfflineMode(true);
       
-      // Só usa fallback se NÃO for erro de "Tabela inexistente"
-      if (error.code === '42P01') {
-          setProjects([]);
+      // Fallback Data
+      setIdeas(INITIAL_IDEAS);
+      setProjects(INITIAL_PROJECTS);
+
+      // Diagnose Error
+      const msg = error.message || '';
+      const code = error.code || '';
+
+      if (code === '42P01') {
+          setErrorType('MISSING_TABLES');
+          setErrorMessage("As tabelas do banco de dados não existem. Execute o script SQL no Supabase.");
+      } else if (msg.includes('Failed to fetch') || msg.includes('URL') || code === 'PGRST301' || msg.includes('apikey')) {
+          setErrorType('CONNECTION');
+          setErrorMessage("Falha na conexão. Verifique se o 'Data API' está habilitado no painel do Supabase.");
       } else {
-          setProjects(INITIAL_PROJECTS);
+          setErrorType('CONNECTION');
+          setErrorMessage(msg || "Erro desconhecido ao conectar.");
       }
     }
 
@@ -250,6 +244,14 @@ const App: React.FC = () => {
       return false;
     }
     return true;
+  };
+
+  const handleOfflineAction = () => {
+      if (isOfflineMode) {
+          alert("FUNCIONALIDADE INDISPONÍVEL.\n\nVerifique a conexão com o Supabase.");
+          return true;
+      }
+      return false;
   };
 
   // DERIVED DATA
@@ -299,6 +301,7 @@ const App: React.FC = () => {
 
   // ================= ACTIONS =================
   const handleUpvote = async (id: string) => {
+    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
     
     // Otimistic UI update
@@ -318,35 +321,33 @@ const App: React.FC = () => {
     const { error } = await supabase.from('ideas').update({ votes_count: newCount }).eq('id', id);
     if (error) {
         console.error("Erro ao votar:", error);
-        // Revert if failed
         setIdeas(ideas); 
         alert("Erro ao computar voto. Verifique a conexão.");
     }
   };
 
-  // Opens the modal
   const promptDeleteIdea = (id: string) => {
+      if (handleOfflineAction()) return;
       if (!requireAuth()) return;
       setIdeaToDelete(id);
   };
 
-  // Executes the delete logic after confirmation
   const confirmDeleteIdea = async () => {
       const id = ideaToDelete;
       if (!id || !session) return;
+      if (handleOfflineAction()) {
+          setIdeaToDelete(null);
+          return;
+      }
 
-      setIdeaToDelete(null); // Close modal
-
-      // 1. Guardar o estado atual para reverter caso dê erro
+      setIdeaToDelete(null); 
       const previousIdeas = [...ideas];
       const ideaData = ideas.find(i => i.id === id);
 
-      // 2. UI Otimista (Remove da tela imediatamente)
       setIdeas(prev => prev.filter(i => i.id !== id));
       if (selectedIdea?.id === id) setSelectedIdea(null);
 
       try {
-          // 3. Tenta deletar no Supabase
           const { error, count } = await supabase
             .from('ideas')
             .delete({ count: 'exact' }) 
@@ -358,31 +359,28 @@ const App: React.FC = () => {
              const isOwner = ideaData?.user_id === session.user.id;
              throw new Error(
                 isOwner 
-                ? "ERRO SILENCIOSO: O banco confirmou a operação mas não deletou nenhum registro. Verifique as Políticas RLS."
-                : "PERMISSÃO NEGADA: Você não é o proprietário desta ideia."
+                ? "Erro ao deletar: Tente novamente."
+                : "Você não tem permissão para deletar esta ideia."
              );
           }
 
       } catch (error: any) {
           console.error('Erro ao deletar:', error);
-          
-          // 5. Reverte a UI
           setIdeas(previousIdeas);
-
           let message = error.message;
           if (error.code === '23503') {
-              message = "Não é possível excluir esta ideia porque existem FAVORITOS associados a ela. Contate o suporte.";
+              message = "Existem favoritos associados a esta ideia.";
           }
           alert(`❌ FALHA AO EXCLUIR:\n\n${message}`);
       }
   };
 
   const handleToggleFavorite = async (id: string) => {
+    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
     const idea = ideas.find(i => i.id === id);
     const isFav = idea?.isFavorite;
 
-    // Optimistic UI
     const updatedIdeas = ideas.map(i => 
         i.id === id ? { ...i, isFavorite: !isFav } : i
     );
@@ -402,13 +400,12 @@ const App: React.FC = () => {
       }
     } catch (error: any) {
         console.error("Erro ao favoritar:", error);
-        alert(`Erro ao salvar favorito: ${error.message}.`);
-        // Revert
-        setIdeas(ideas);
+        setIdeas(ideas); // Revert
     }
   };
 
   const handleToggleBuild = async (id: string) => {
+    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
     const idea = ideas.find(i => i.id === id);
     const newState = !idea?.is_building;
@@ -423,12 +420,11 @@ const App: React.FC = () => {
     }
 
     const { error } = await supabase.from('ideas').update({ is_building: newState }).eq('id', id);
-    if (error) {
-        alert("Erro ao atualizar status.");
-    }
+    if (error) alert("Erro ao atualizar status.");
   };
 
   const handleAddIdea = async (ideaData: any) => {
+    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
     
     const { data, error } = await supabase.from('ideas').insert({
@@ -436,10 +432,9 @@ const App: React.FC = () => {
       user_id: session.user.id,
       votes_count: 0,
       is_building: false
-    }).select('*, profiles(full_name, avatar_url)').single(); // Ensure we get profile back if possible, or wait for refresh
+    }).select('*, profiles(full_name, avatar_url)').single(); 
 
     if (data && !error) {
-      // If profile info is missing from insert return (common), optimistically add it
       const optimisticData = {
           ...data,
           profiles: {
@@ -448,14 +443,14 @@ const App: React.FC = () => {
           }
       }
       setIdeas(prev => [optimisticData, ...prev]);
-      setShowMyIdeasOnly(true); // Switch to my ideas to show the new one
+      setShowMyIdeasOnly(true);
     } else {
-        console.error("Erro ao salvar ideia:", error);
         alert(`ERRO AO SALVAR: ${error?.message || JSON.stringify(error)}`);
     }
   };
 
   const handleRequestPdr = async (ideaId: string, ownerId: string, ideaTitle: string, message: string) => {
+      if (handleOfflineAction()) return;
       if (!requireAuth()) return;
 
       const { error } = await supabase.from('notifications').insert({
@@ -474,6 +469,7 @@ const App: React.FC = () => {
   };
 
   const handleAddProject = async (newProjectData: any) => {
+    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
     
     const { data, error } = await supabase.from('projects').insert({
@@ -494,12 +490,12 @@ const App: React.FC = () => {
         setProjects(prev => [optimisticData, ...prev]);
         setViewState({ type: 'SHOWROOM' });
     } else {
-        console.error("Erro ao salvar projeto:", error);
         alert(`ERRO AO SALVAR PROJETO: ${error?.message}`);
     }
   };
 
   const handleAddReview = async (projectId: string, reviewData: any) => {
+    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
     const { data, error } = await supabase.from('reviews').insert({
         project_id: projectId,
@@ -514,6 +510,57 @@ const App: React.FC = () => {
     } else {
         alert(`Erro ao enviar review: ${error?.message}`);
     }
+  };
+
+  // ================= RENDER ERROR BANNER =================
+  const renderErrorBanner = () => {
+    if (!isOfflineMode || errorType === 'NONE') return null;
+
+    if (errorType === 'MISSING_TABLES') {
+        return (
+            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row items-start gap-4 shadow-sm animate-in slide-in-from-top-4">
+                <div className="bg-amber-100 p-2 rounded-full mt-1">
+                    <Database className="w-5 h-5 text-amber-700" />
+                </div>
+                <div className="flex-grow">
+                    <h3 className="text-sm font-bold text-amber-900 mb-1">Banco de Dados Vazio</h3>
+                    <p className="text-amber-800 text-xs mb-3 leading-relaxed">
+                        As tabelas necessárias não foram encontradas. Você precisa rodar o script SQL de configuração no painel do Supabase.
+                    </p>
+                    <button onClick={() => fetchData()} className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-bold transition-colors">
+                        Já rodei o SQL, verificar novamente
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (errorType === 'CONNECTION') {
+        return (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col md:flex-row items-start gap-4 shadow-sm animate-in slide-in-from-top-4">
+                 <div className="bg-red-100 p-2 rounded-full mt-1">
+                    <Settings2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div className="flex-grow">
+                    <h3 className="text-sm font-bold text-red-900 mb-1">Erro de Conexão com Supabase</h3>
+                    <p className="text-red-800 text-xs mb-2 leading-relaxed">
+                        {errorMessage || "Não foi possível conectar ao banco de dados."}
+                    </p>
+                    <p className="text-[10px] font-mono text-red-600 bg-red-100/50 p-1.5 rounded border border-red-100 inline-block">
+                        Dica: Verifique se "Enable Data API" está ligado em Settings {'>'} API.
+                    </p>
+                </div>
+                <button 
+                    onClick={() => fetchData()} 
+                    className="whitespace-nowrap px-3 py-1.5 bg-white border border-red-200 rounded-lg text-red-700 text-xs font-bold hover:bg-red-50 transition-colors flex items-center gap-2"
+                >
+                    <RefreshCw className="w-3 h-3" /> Tentar Novamente
+                </button>
+            </div>
+        );
+    }
+    
+    return null;
   };
 
   // ================= RENDER CONTENT =================
@@ -548,58 +595,7 @@ const App: React.FC = () => {
       return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
           
-          {/* Mensagem de Erro de Configuração */}
-          {configError && (
-             <div className="mb-8 bg-red-50 border border-red-200 rounded-xl p-6 flex flex-col md:flex-row items-start gap-4 shadow-sm">
-                <div className="bg-red-100 p-2.5 rounded-full mt-1">
-                    <Settings className="w-6 h-6 text-red-600" />
-                </div>
-                <div className="flex-grow">
-                    <h3 className="text-lg font-bold text-red-700 mb-1">Configuração Pendente</h3>
-                    <p className="text-red-600 text-sm mb-3 leading-relaxed">
-                        O aplicativo não conseguiu conectar ao Supabase. Você precisa adicionar suas chaves de API no arquivo <code>lib/supabaseClient.ts</code>.
-                    </p>
-                    <div className="bg-white/60 p-3 rounded-lg text-xs font-mono text-red-800 border border-red-100 mb-3">
-                         Supabase Project Settings -&gt; API -&gt; URL & Anon Key
-                    </div>
-                    <button 
-                        onClick={() => window.location.reload()} 
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors shadow-sm"
-                    >
-                        Já configurei, recarregar página
-                    </button>
-                </div>
-             </div>
-          )}
-
-          {isOfflineMode && !configError && (
-              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-amber-800 text-sm shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-amber-100 p-2 rounded-lg mt-0.5">
-                        <Database className="w-5 h-5 text-amber-700" />
-                    </div>
-                    <div>
-                        <strong className="block text-amber-900 mb-1">Modo Offline / Erro de Banco</strong>
-                        {dbError ? (
-                            <div className="space-y-1">
-                                <p className="font-medium text-amber-900">{dbError}</p>
-                                {dbError.includes("Tabelas não encontradas") && (
-                                    <p className="text-xs opacity-80">Como você deletou as tabelas, a visualização está vazia. Use o SQL Editor para recriar a estrutura se desejar.</p>
-                                )}
-                            </div>
-                        ) : (
-                            "Não foi possível conectar ao banco de dados. Exibindo dados fictícios."
-                        )}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => fetchData()} 
-                    className="whitespace-nowrap px-4 py-2 bg-white border border-amber-200 rounded-lg text-amber-800 font-bold hover:bg-amber-50 transition-colors flex items-center gap-2 shadow-sm"
-                  >
-                    <RefreshCw className="w-4 h-4" /> Tentar Conectar Novamente
-                  </button>
-              </div>
-          )}
+          {renderErrorBanner()}
 
           {/* Header Title & CTA */}
           <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4 mt-4 pb-8 border-b border-gray-200">
@@ -612,7 +608,7 @@ const App: React.FC = () => {
               </p>
             </div>
             <button 
-                onClick={() => { if(requireAuth()) setIsIdeaModalOpen(true); }}
+                onClick={() => { if(handleOfflineAction()) return; if(requireAuth()) setIsIdeaModalOpen(true); }}
                 className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium flex items-center gap-2 shadow-lg shadow-black/10 transition-all transform hover:scale-105 text-sm"
             >
                 <Lightbulb className="w-4 h-4" /> Nova Ideia
@@ -650,7 +646,7 @@ const App: React.FC = () => {
                 <div className="space-y-3">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filtros</label>
                     <button 
-                        onClick={() => { if(requireAuth()) { setShowFavoritesOnly(!showFavoritesOnly); setShowMyIdeasOnly(false); } }}
+                        onClick={() => { if(handleOfflineAction()) return; if(requireAuth()) { setShowFavoritesOnly(!showFavoritesOnly); setShowMyIdeasOnly(false); } }}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${showFavoritesOnly ? 'bg-white border-apple-blue shadow-sm' : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200'}`}
                     >
                         <span className={`flex items-center gap-2 text-sm font-medium ${showFavoritesOnly ? 'text-apple-blue' : 'text-gray-600'}`}>
@@ -664,7 +660,7 @@ const App: React.FC = () => {
                 <div className="space-y-3">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Meus Projetos</label>
                     <button 
-                        onClick={() => { if(requireAuth()) { setShowMyIdeasOnly(!showMyIdeasOnly); setShowFavoritesOnly(false); setSelectedNiche('Todos'); } }}
+                        onClick={() => { if(handleOfflineAction()) return; if(requireAuth()) { setShowMyIdeasOnly(!showMyIdeasOnly); setShowFavoritesOnly(false); setSelectedNiche('Todos'); } }}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${showMyIdeasOnly ? 'bg-white border-apple-blue shadow-sm' : 'bg-transparent border-transparent hover:bg-white hover:border-gray-200'}`}
                     >
                         <span className={`flex items-center gap-2 text-sm font-medium ${showMyIdeasOnly ? 'text-apple-blue' : 'text-gray-600'}`}>
@@ -749,9 +745,7 @@ const App: React.FC = () => {
                         </div>
                         <h3 className="text-lg font-semibold text-gray-900">Nenhum resultado encontrado</h3>
                         <p className="text-gray-500 max-w-xs mt-2">
-                            {dbError && dbError.includes("Tabelas não encontradas") 
-                                ? "O banco de dados está vazio (tabelas deletadas)."
-                                : (showMyIdeasOnly ? "Você ainda não cadastrou nenhuma ideia." : "Tente ajustar seus filtros ou buscar por outro termo.")}
+                            {showMyIdeasOnly ? "Você ainda não cadastrou nenhuma ideia." : "Tente ajustar seus filtros ou buscar por outro termo."}
                         </p>
                         <button onClick={() => {setSearchQuery(''); setSelectedNiche('Todos'); setShowFavoritesOnly(false); setShowMyIdeasOnly(false);}} className="mt-6 text-apple-blue font-medium hover:underline">Limpar filtros</button>
                     </div>
@@ -766,6 +760,9 @@ const App: React.FC = () => {
     if (viewState.type === 'SHOWROOM') {
       return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
+           
+           {renderErrorBanner()}
+
            <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-4 mt-4">
             <div>
               <h2 className="text-4xl font-semibold tracking-tight text-apple-text mb-2">
@@ -776,7 +773,7 @@ const App: React.FC = () => {
               </p>
             </div>
             <button 
-                onClick={() => { if(requireAuth()) setIsProjectModalOpen(true); }}
+                onClick={() => { if(handleOfflineAction()) return; if(requireAuth()) setIsProjectModalOpen(true); }}
                 className="bg-black hover:bg-gray-800 text-white px-5 py-2 rounded-full font-medium flex items-center gap-2 shadow-lg shadow-black/10 transition-all transform hover:scale-105 text-sm"
             >
                 <Plus className="w-4 h-4" /> Cadastrar Projeto
@@ -794,7 +791,6 @@ const App: React.FC = () => {
             {projects.length === 0 && (
                  <div className="col-span-full text-center py-20 text-gray-400">
                      <div className="mb-2">Nenhum projeto encontrado.</div>
-                     {dbError && <div className="text-xs opacity-70">(Verifique a conexão com o banco)</div>}
                  </div>
             )}
           </div>
@@ -878,6 +874,12 @@ const App: React.FC = () => {
             {/* Auth & Notifications & Mobile */}
             <div className="flex items-center gap-4">
               
+              {isOfflineMode && (
+                  <div className="hidden md:flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                      <WifiOff className="w-3 h-3" /> Demo
+                  </div>
+              )}
+
               {session ? (
                 <>
                     {/* Notification Bell */}
@@ -934,7 +936,6 @@ const App: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
-                                {/* Backdrop to close */}
                                 <div className="fixed inset-0 z-40 cursor-default" onClick={() => setShowNotifications(false)}></div>
                             </>
                         )}
@@ -962,7 +963,6 @@ const App: React.FC = () => {
                                 )}
                             </button>
 
-                            {/* Hover Dropdown */}
                              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden hidden group-hover:block z-50">
                                 <button 
                                     onClick={() => setViewState({ type: 'PROFILE' })}

@@ -38,7 +38,8 @@ import {
   Building2,
   CheckCircle,
   Eye,
-  Unlock
+  Unlock,
+  User
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
