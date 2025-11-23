@@ -1,3 +1,4 @@
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
 import { CACHE_KEYS } from '../lib/cache-keys';
@@ -10,26 +11,16 @@ export function useIdeas(filters?: { category?: string; search?: string; userId?
   return useQuery({
     queryKey: CACHE_KEYS.ideas.list(filters),
     queryFn: async () => {
-      // Tenta buscar da view materializada primeiro (se existisse no frontend, mas vamos usar a query otimizada)
-      // Como o usuário mencionou cached_ideas_with_stats mas estamos no front, 
-      // e o RLS pode impedir acesso direto a views se não configurado,
-      // vamos manter a query robusta mas cacheada.
-      
+      // USAR VIEW MATERIALIZADA/CACHEADA
       let query = supabase
-        .from('ideas') // Ou 'cached_ideas_with_stats' se configurado publicamente
-        .select(`
-            *, 
-            profiles(full_name, avatar_url),
-            idea_interested(id, user_id, created_at, profiles(full_name, avatar_url)),
-            idea_improvements(id, user_id, content, created_at, parent_id, thread_level, profiles(full_name, avatar_url)),
-            idea_transactions(id, user_id, transaction_type, amount, status, created_at, profiles(full_name, avatar_url))
-        `)
+        .from('cached_ideas_with_stats')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (filters?.category && filters.category !== 'Todos') {
         query = query.eq('niche', filters.category);
       }
-      // Filtro de busca é feito no client ou backend? Vamos fazer backend basic
+      
       if (filters?.search) {
         query = query.ilike('title', `%${filters.search}%`);
       }
@@ -40,13 +31,19 @@ export function useIdeas(filters?: { category?: string; search?: string; userId?
       const { data, error } = await query;
       if (error) throw error;
       
-      // Processamento básico para garantir arrays
+      // Mapeamento para garantir compatibilidade com componentes que esperam arrays
       return (data as any[]).map(i => ({
           ...i,
-          idea_interested: i.idea_interested || [],
-          idea_improvements: i.idea_improvements?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [],
-          idea_transactions: i.idea_transactions || [],
-          payment_type: i.payment_type || 'free'
+          // Arrays vazios para listagem (não precisamos carregar tudo na lista)
+          idea_interested: [],
+          idea_improvements: [],
+          idea_transactions: [],
+          payment_type: i.payment_type || 'free',
+          // Fallback para manter compatibilidade com código legado que busca em profiles
+          profiles: {
+            full_name: i.creator_name || 'Anônimo',
+            avatar_url: i.creator_avatar
+          }
       })) as Idea[];
     },
     ...CACHE_STRATEGIES.DYNAMIC,
@@ -59,25 +56,52 @@ export function useIdeaDetail(ideaId: string) {
   return useQuery({
     queryKey: CACHE_KEYS.ideas.detail(ideaId),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ideas')
-        .select(`
-            *, 
-            profiles(full_name, avatar_url),
-            idea_interested(id, user_id, created_at, profiles(full_name, avatar_url)),
-            idea_improvements(id, user_id, content, created_at, parent_id, thread_level, profiles(full_name, avatar_url)),
-            idea_transactions(id, user_id, transaction_type, amount, status, created_at, profiles(full_name, avatar_url))
-        `)
+      // 1. Buscar dados principais da View
+      const ideaQuery = supabase
+        .from('cached_ideas_with_stats')
+        .select('*')
         .eq('id', ideaId)
         .single();
-        
-      if (error) throw error;
+
+      // 2. Buscar relações separadamente (já que views nem sempre suportam deep joins automáticos)
+      const improvementsQuery = supabase
+        .from('idea_improvements')
+        .select('*, profiles(full_name, avatar_url)')
+        .eq('idea_id', ideaId)
+        .order('created_at', { ascending: true });
+
+      const interestedQuery = supabase
+        .from('idea_interested')
+        .select('*, profiles(full_name, avatar_url)')
+        .eq('idea_id', ideaId);
+
+      const transactionsQuery = supabase
+        .from('idea_transactions')
+        .select('*, profiles(full_name, avatar_url)')
+        .eq('idea_id', ideaId);
+
+      // Executar em paralelo
+      const [ideaRes, improvementsRes, interestedRes, transactionsRes] = await Promise.all([
+          ideaQuery,
+          improvementsQuery,
+          interestedQuery,
+          transactionsQuery
+      ]);
+
+      if (ideaRes.error) throw ideaRes.error;
+
+      const data = ideaRes.data;
+
       return {
           ...data,
-          idea_interested: data.idea_interested || [],
-          idea_improvements: data.idea_improvements?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [],
-          idea_transactions: data.idea_transactions || [],
-          payment_type: data.payment_type || 'free'
+          idea_interested: interestedRes.data || [],
+          idea_improvements: improvementsRes.data || [],
+          idea_transactions: transactionsRes.data || [],
+          payment_type: data.payment_type || 'free',
+          profiles: {
+            full_name: data.creator_name || 'Anônimo',
+            avatar_url: data.creator_avatar
+          }
       } as Idea;
     },
     // Usa dados da lista como placeholder enquanto carrega

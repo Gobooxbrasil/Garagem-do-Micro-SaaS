@@ -198,6 +198,10 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const isPaidContent = idea.payment_type === 'paid';
   const isHidden = (field: string) => isPaidContent && idea.hidden_fields?.includes(field) && !isUnlocked && !isOwner;
 
+  // USE FLATTENED STATS
+  const creatorName = idea.creator_name || idea.profiles?.full_name || 'Anônimo';
+  const creatorAvatar = idea.creator_avatar || idea.profiles?.avatar_url;
+
   const organizeThreads = (improvements: Improvement[]) => {
       const map = new Map<string, Improvement>();
       const roots: Improvement[] = [];
@@ -391,8 +395,8 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                         </div>
                         <div className="flex items-center gap-3 text-sm text-gray-500">
                              <div className="flex items-center gap-1.5">
-                                <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden">{idea.profiles?.avatar_url ? <img src={idea.profiles.avatar_url} className="w-full h-full object-cover"/> : <User className="w-3 h-3 m-1.5 text-gray-400"/>}</div>
-                                <span className="font-medium text-gray-700">{idea.profiles?.full_name || 'Anônimo'}</span>
+                                <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden">{creatorAvatar ? <img src={creatorAvatar} className="w-full h-full object-cover"/> : <User className="w-3 h-3 m-1.5 text-gray-400"/>}</div>
+                                <span className="font-medium text-gray-700">{creatorName}</span>
                              </div>
                              <span>•</span>
                              <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(idea.created_at).toLocaleDateString()}</span>
@@ -455,7 +459,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
             isOpen={showRequestPixModal} 
             onClose={() => setShowRequestPixModal(false)}
             creatorId={idea.user_id!}
-            creatorName={creatorProfile?.full_name || 'Criador'}
+            creatorName={creatorName}
             ideaId={idea.id}
             ideaTitle={idea.title}
             currentUserId={currentUserId!}

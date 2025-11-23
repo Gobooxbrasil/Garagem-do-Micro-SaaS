@@ -72,6 +72,10 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
 
+  // READ FROM FLATTENED STATS VIEW FIRST
+  const creatorName = idea.creator_name || idea.profiles?.full_name || 'Anônimo';
+  const creatorAvatar = idea.creator_avatar || idea.profiles?.avatar_url;
+
   const renderMonetizationBadge = () => {
     if (idea.payment_type === 'paid') {
         return (
@@ -93,16 +97,16 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const renderAuthor = () => (
       <div className="flex items-center gap-2 group/author">
           <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 border border-gray-100 shrink-0">
-              {idea.profiles?.avatar_url ? (
-                  <img src={idea.profiles.avatar_url} alt="Autor" className="w-full h-full object-cover" />
+              {creatorAvatar ? (
+                  <img src={creatorAvatar} alt={creatorName} className="w-full h-full object-cover" />
               ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-400">
                       <User className="w-3 h-3" />
                   </div>
               )}
           </div>
-          <span className="text-[10px] text-gray-400 font-medium truncate max-w-[80px] group-hover/author:text-gray-600 transition-colors">
-              {idea.profiles?.full_name?.split(' ')[0] || 'Anônimo'}
+          <span className="text-[10px] text-gray-400 font-medium truncate max-w-[100px] group-hover/author:text-gray-600 transition-colors">
+              {creatorName}
           </span>
       </div>
   );

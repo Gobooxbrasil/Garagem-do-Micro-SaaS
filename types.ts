@@ -79,7 +79,12 @@ export interface Idea {
   contact_phone?: string;
   contact_email?: string;
 
-  // Joined Profile Data
+  // View Fields (cached_ideas_with_stats)
+  creator_name?: string | null;
+  creator_avatar?: string | null;
+  creator_email?: string | null;
+
+  // Joined Profile Data (Legacy / Fallback)
   profiles?: {
     full_name: string;
     avatar_url: string;
