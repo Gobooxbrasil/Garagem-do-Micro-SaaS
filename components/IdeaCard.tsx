@@ -2,12 +2,8 @@
 import React from 'react';
 import { Idea } from '../types';
 import { 
-  ArrowBigUp,
   Heart,
-  ChevronRight,
-  Zap,
-  Lightbulb,
-  DollarSign, 
+  Flame,
   Activity, 
   PawPrint, 
   GraduationCap, 
@@ -21,7 +17,12 @@ import {
   Plane,
   Utensils,
   Truck,
-  Trash2
+  Trash2,
+  Lightbulb,
+  DollarSign,
+  Gift,
+  Lock,
+  User
 } from 'lucide-react';
 
 interface IdeaCardProps {
@@ -44,7 +45,7 @@ export const getNicheVisuals = (niche: string) => {
     if (n.includes('saúde') || n.includes('med') || n.includes('health') || n.includes('bem-estar')) return { icon: Activity, bg: 'bg-rose-100', text: 'text-rose-600' };
     if (n.includes('pet') || n.includes('dog') || n.includes('cat') || n.includes('vet')) return { icon: PawPrint, bg: 'bg-orange-100', text: 'text-orange-600' };
     if (n.includes('educa') || n.includes('ensino') || n.includes('escol')) return { icon: GraduationCap, bg: 'bg-blue-100', text: 'text-blue-600' };
-    if (n.includes('produt') || n.includes('task') || n.includes('gestão')) return { icon: Zap, bg: 'bg-yellow-100', text: 'text-yellow-600' };
+    if (n.includes('produt') || n.includes('task') || n.includes('gestão')) return { icon: Rocket, bg: 'bg-yellow-100', text: 'text-yellow-600' };
     if (n.includes('juríd') || n.includes('lei') || n.includes('advoga')) return { icon: Scale, bg: 'bg-slate-100', text: 'text-slate-600' };
     if (n.includes('agro') || n.includes('fazenda')) return { icon: Tractor, bg: 'bg-green-100', text: 'text-green-700' };
     if (n.includes('dev') || n.includes('code') || n.includes('ia') || n.includes('tech')) return { icon: Code2, bg: 'bg-indigo-100', text: 'text-indigo-600' };
@@ -66,9 +67,45 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const isList = viewMode === 'list';
   const hasImage = idea.images && idea.images.length > 0 && idea.images[0] !== '';
   const isOwner = currentUserId && idea.user_id === currentUserId;
+  const hasVotes = idea.votes_count > 0;
   
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
+
+  const renderMonetizationBadge = () => {
+    if (idea.monetization_type === 'PAID') {
+        return (
+            <div className="absolute top-3 right-14 z-20 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
+                <Lock className="w-3 h-3" /> R$ {idea.price}
+            </div>
+        );
+    }
+    if (idea.monetization_type === 'DONATION') {
+        return (
+            <div className="absolute top-3 right-14 z-20 bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
+                <Gift className="w-3 h-3" /> Apoiar
+            </div>
+        );
+    }
+    return null;
+  };
+
+  const renderAuthor = () => (
+      <div className="flex items-center gap-2 group/author">
+          <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 border border-gray-100 shrink-0">
+              {idea.profiles?.avatar_url ? (
+                  <img src={idea.profiles.avatar_url} alt="Autor" className="w-full h-full object-cover" />
+              ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      <User className="w-3 h-3" />
+                  </div>
+              )}
+          </div>
+          <span className="text-[10px] text-gray-400 font-medium truncate max-w-[80px] group-hover/author:text-gray-600 transition-colors">
+              {idea.profiles?.full_name?.split(' ')[0] || 'Anônimo'}
+          </span>
+      </div>
+  );
 
   // LIST VIEW LAYOUT
   if (isList) {
@@ -88,8 +125,11 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
 
         {/* Score */}
         <div className="flex flex-col items-center min-w-[3rem]">
-             <span className="text-xs font-bold text-gray-400 mb-1">Score</span>
-             <span className="text-lg font-bold text-apple-blue">{idea.votes_count}</span>
+             <span className="text-xs font-bold text-gray-400 mb-1">Rank</span>
+             <span className={`text-lg font-bold flex items-center gap-1 ${hasVotes ? 'text-orange-500' : 'text-gray-300'}`}>
+                {idea.votes_count}
+                <Flame className={`w-3 h-3 ${hasVotes ? 'fill-orange-500 animate-pulse' : 'text-gray-300'}`} />
+             </span>
         </div>
 
         {/* Middle: Content */}
@@ -98,24 +138,28 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 ${visuals.bg} ${visuals.text.replace('text-', 'text-opacity-80 text-')}`}>
               {idea.niche}
             </span>
+            {idea.monetization_type === 'PAID' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
             {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
           </div>
           <h3 className="text-base font-bold text-apple-text truncate">{idea.title}</h3>
-          <p className="text-xs text-gray-500 truncate">{idea.pain}</p>
+          <div className="flex items-center gap-3 mt-1">
+             <p className="text-xs text-gray-500 truncate max-w-[200px]">{idea.pain}</p>
+             <span className="text-gray-300 text-[10px]">•</span>
+             {renderAuthor()}
+          </div>
         </div>
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
             {isOwner && onDelete && (
                 <button 
-                    onClick={(e) => { e.stopPropagation(); if(confirm('Tem certeza que deseja excluir?')) onDelete(idea.id); }}
+                    onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
                     className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
                     title="Excluir minha ideia"
                 >
                     <Trash2 className="w-4 h-4" />
                 </button>
             )}
-            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-apple-blue transition-colors" />
         </div>
       </div>
     );
@@ -146,12 +190,14 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
             {idea.niche}
             </span>
         </div>
+
+        {renderMonetizationBadge()}
         
         {/* Actions Top Right */}
         <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
              {isOwner && onDelete && (
                  <button 
-                    onClick={(e) => { e.stopPropagation(); if(confirm('Tem certeza que deseja excluir esta ideia?')) onDelete(idea.id); }}
+                    onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
                     className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
                     title="Excluir Projeto"
                 >
@@ -180,21 +226,25 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
             </p>
         </div>
 
-        {/* Footer: Votes & Action */}
+        {/* Footer: Votes & Action & Author */}
         <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
-            <button 
-                onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
-                className="flex items-center gap-1.5 text-gray-500 hover:text-apple-text transition-colors bg-gray-50 hover:bg-gray-100 px-2 py-1 rounded-lg"
-            >
-                <ArrowBigUp className="w-4 h-4" />
-                <span className="text-xs font-bold">{idea.votes_count}</span>
-            </button>
+            <div className="flex items-center gap-3">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
+                    className={`flex items-center gap-1.5 transition-colors bg-gray-50 hover:bg-gray-100 px-2 py-1 rounded-lg ${hasVotes ? 'text-orange-600' : 'text-gray-400'}`}
+                    title="Votar nesta ideia"
+                >
+                    <Flame className={`w-4 h-4 ${hasVotes ? 'fill-orange-500 text-orange-500 animate-pulse' : 'text-gray-300'}`} />
+                    <span className="text-xs font-bold">{idea.votes_count}</span>
+                </button>
+                {renderAuthor()}
+            </div>
 
             <button 
                 onClick={() => onClick(idea)}
                 className="text-xs font-semibold text-apple-blue hover:text-apple-blueHover flex items-center gap-1 group/btn"
             >
-                Ver Detalhes <Zap className="w-3 h-3 group-hover/btn:fill-apple-blue transition-colors" />
+                Ver Detalhes
             </button>
         </div>
       </div>

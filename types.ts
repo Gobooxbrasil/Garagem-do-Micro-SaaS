@@ -17,6 +17,19 @@ export interface Idea {
   created_at: string; // ISO Date string (Matches DB column)
   user_id?: string;
   images?: string[];
+  
+  // Monetization Fields
+  monetization_type?: 'NONE' | 'DONATION' | 'PAID';
+  price?: number;
+  hidden_fields?: string[]; // 'pain' | 'solution' | 'pdr' | 'why' ...
+  contact_phone?: string;
+  contact_email?: string;
+
+  // Joined Profile Data
+  profiles?: {
+    full_name: string;
+    avatar_url: string;
+  };
 }
 
 export interface Review {
@@ -42,6 +55,12 @@ export interface Project {
   reviews?: Review[];
   created_at?: string;
   user_id?: string;
+
+  // Joined Profile Data
+  profiles?: {
+    full_name: string;
+    avatar_url: string;
+  };
 }
 
 export interface Notification {

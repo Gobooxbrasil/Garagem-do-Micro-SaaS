@@ -10,6 +10,7 @@ import NewProjectModal from './components/NewProjectModal';
 import NewIdeaModal from './components/NewIdeaModal';
 import IdeaDetailModal from './components/IdeaDetailModal';
 import AuthModal from './components/AuthModal';
+import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import LandingPage from './components/LandingPage';
 import ProfileView from './components/ProfileView'; // Import ProfileView
 import { 
@@ -40,6 +41,7 @@ import {
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [viewState, setViewState] = useState<ViewState>({ type: 'LANDING' });
   
@@ -58,6 +60,9 @@ const App: React.FC = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   
+  // DELETE CONFIRMATION STATE
+  const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
+  
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null);
 
   // FILTER & VIEW STATES
@@ -75,6 +80,7 @@ const App: React.FC = () => {
       if (session) {
          setViewState({ type: 'IDEAS' });
          fetchNotifications(session.user.id);
+         fetchUserAvatar(session.user.id);
       }
     }).finally(() => {
       setIsAuthChecking(false);
@@ -88,16 +94,18 @@ const App: React.FC = () => {
           // If logged in from landing, go to ideas
           setViewState(prev => prev.type === 'LANDING' ? { type: 'IDEAS' } : prev);
           fetchNotifications(session.user.id);
+          fetchUserAvatar(session.user.id);
       } else {
           setViewState({ type: 'LANDING' });
           setNotifications([]);
+          setUserAvatar(null);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // ================= NOTIFICATIONS LOGIC =================
+  // ================= NOTIFICATIONS & USER LOGIC =================
   const fetchNotifications = async (userId: string) => {
       try {
           const { data, error } = await supabase
@@ -111,6 +119,22 @@ const App: React.FC = () => {
           }
       } catch (err) {
           console.error("Erro ao buscar notificações:", err);
+      }
+  };
+
+  const fetchUserAvatar = async (userId: string) => {
+      try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', userId)
+            .single();
+          
+          if (data?.avatar_url) {
+              setUserAvatar(data.avatar_url);
+          }
+      } catch (error) {
+          console.error("Erro ao buscar avatar", error);
       }
   };
 
@@ -131,9 +155,10 @@ const App: React.FC = () => {
     
     try {
       // --- FETCH IDEAS ---
+      // We join with profiles to get author info
       const { data: ideasData, error: ideasError } = await supabase
         .from('ideas')
-        .select('*')
+        .select('*, profiles(full_name, avatar_url)')
         .order('created_at', { ascending: false });
 
       if (ideasError) throw ideasError;
@@ -185,7 +210,7 @@ const App: React.FC = () => {
       // --- FETCH PROJECTS ---
       const { data: projectsData, error: projError } = await supabase
         .from('projects')
-        .select(`*, reviews (*)`)
+        .select(`*, reviews (*), profiles(full_name, avatar_url)`)
         .order('created_at', { ascending: false });
         
       if (projError) throw projError;
@@ -299,12 +324,22 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteIdea = async (id: string) => {
+  // Opens the modal
+  const promptDeleteIdea = (id: string) => {
       if (!requireAuth()) return;
+      setIdeaToDelete(id);
+  };
+
+  // Executes the delete logic after confirmation
+  const confirmDeleteIdea = async () => {
+      const id = ideaToDelete;
+      if (!id || !session) return;
+
+      setIdeaToDelete(null); // Close modal
 
       // 1. Guardar o estado atual para reverter caso dê erro
       const previousIdeas = [...ideas];
-      const ideaToDelete = ideas.find(i => i.id === id);
+      const ideaData = ideas.find(i => i.id === id);
 
       // 2. UI Otimista (Remove da tela imediatamente)
       setIdeas(prev => prev.filter(i => i.id !== id));
@@ -312,7 +347,6 @@ const App: React.FC = () => {
 
       try {
           // 3. Tenta deletar no Supabase
-          // count: 'exact' é crucial para saber se alguma linha foi realmente afetada
           const { error, count } = await supabase
             .from('ideas')
             .delete({ count: 'exact' }) 
@@ -320,15 +354,12 @@ const App: React.FC = () => {
           
           if (error) throw error;
 
-          // 4. Se count for 0, o banco não deletou nada (provavelmente RLS bloqueou)
           if (count === 0) {
-             // Verifica se o usuário é dono da ideia no Frontend para mensagem correta
-             const isOwner = ideaToDelete?.user_id === session.user.id;
-             
+             const isOwner = ideaData?.user_id === session.user.id;
              throw new Error(
                 isOwner 
                 ? "ERRO SILENCIOSO: O banco confirmou a operação mas não deletou nenhum registro. Verifique as Políticas RLS."
-                : "PERMISSÃO NEGADA: Você não é o proprietário desta ideia no banco de dados."
+                : "PERMISSÃO NEGADA: Você não é o proprietário desta ideia."
              );
           }
 
@@ -338,14 +369,10 @@ const App: React.FC = () => {
           // 5. Reverte a UI
           setIdeas(previousIdeas);
 
-          // 6. Mensagens de Erro Amigáveis
           let message = error.message;
-          
-          // Erro de Chave Estrangeira (Foreign Key) - Código Postgres 23503
           if (error.code === '23503') {
-              message = "Não é possível excluir esta ideia porque existem FAVORITOS associados a ela.\n\nSolução: É necessário rodar um script SQL para ativar o 'CASCADE DELETE' no banco de dados.";
+              message = "Não é possível excluir esta ideia porque existem FAVORITOS associados a ela. Contate o suporte.";
           }
-
           alert(`❌ FALHA AO EXCLUIR:\n\n${message}`);
       }
   };
@@ -409,10 +436,18 @@ const App: React.FC = () => {
       user_id: session.user.id,
       votes_count: 0,
       is_building: false
-    }).select().single();
+    }).select('*, profiles(full_name, avatar_url)').single(); // Ensure we get profile back if possible, or wait for refresh
 
     if (data && !error) {
-      setIdeas(prev => [data, ...prev]);
+      // If profile info is missing from insert return (common), optimistically add it
+      const optimisticData = {
+          ...data,
+          profiles: {
+             full_name: session.user.user_metadata?.full_name || 'Eu',
+             avatar_url: userAvatar || ''
+          }
+      }
+      setIdeas(prev => [optimisticData, ...prev]);
       setShowMyIdeasOnly(true); // Switch to my ideas to show the new one
     } else {
         console.error("Erro ao salvar ideia:", error);
@@ -445,10 +480,18 @@ const App: React.FC = () => {
       ...newProjectData,
       user_id: session.user.id,
       images: newProjectData.images 
-    }).select().single();
+    }).select('*, profiles(full_name, avatar_url)').single();
 
     if (data && !error) {
-        setProjects(prev => [{...data, reviews: []}, ...prev]);
+        const optimisticData = {
+          ...data,
+          reviews: [],
+          profiles: {
+             full_name: session.user.user_metadata?.full_name || 'Eu',
+             avatar_url: userAvatar || ''
+          }
+        }
+        setProjects(prev => [optimisticData, ...prev]);
         setViewState({ type: 'SHOWROOM' });
     } else {
         console.error("Erro ao salvar projeto:", error);
@@ -693,7 +736,7 @@ const App: React.FC = () => {
                         onUpvote={handleUpvote} 
                         onToggleBuild={handleToggleBuild} 
                         onToggleFavorite={handleToggleFavorite}
-                        onDelete={handleDeleteIdea}
+                        onDelete={promptDeleteIdea} 
                         viewMode={ideasViewMode}
                         onClick={(i) => setSelectedIdea(i)}
                         currentUserId={session?.user?.id}
@@ -910,12 +953,16 @@ const App: React.FC = () => {
                             <button 
                                 onClick={() => setViewState(prev => prev.type === 'PROFILE' ? { type: 'IDEAS' } : { type: 'PROFILE' })}
                                 title="Meu Perfil"
-                                className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold shadow-sm transition-all overflow-hidden ${viewState.type === 'PROFILE' ? 'border-apple-blue ring-2 ring-apple-blue/20' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'}`}
+                                className={`w-12 h-12 rounded-full border flex items-center justify-center text-xs font-bold shadow-sm transition-all overflow-hidden hover:scale-105 hover:shadow-md active:scale-95 ${viewState.type === 'PROFILE' ? 'border-apple-blue ring-2 ring-apple-blue/30' : 'bg-gray-100 border-gray-200 text-gray-500 hover:border-gray-300'}`}
                             >
-                                <UserCircle className="w-5 h-5" />
+                                {userAvatar ? (
+                                    <img src={userAvatar} alt="Perfil" className="w-full h-full object-cover scale-110" />
+                                ) : (
+                                    <UserCircle className="w-6 h-6" />
+                                )}
                             </button>
 
-                            {/* Hover Dropdown (Simple logout logic integrated in button for now, but extending for Profile nav) */}
+                            {/* Hover Dropdown */}
                              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden hidden group-hover:block z-50">
                                 <button 
                                     onClick={() => setViewState({ type: 'PROFILE' })}
@@ -981,6 +1028,12 @@ const App: React.FC = () => {
         onToggleBuild={handleToggleBuild}
         onToggleFavorite={handleToggleFavorite}
         onRequestPdr={handleRequestPdr}
+      />
+
+      <DeleteConfirmationModal 
+        isOpen={!!ideaToDelete}
+        onClose={() => setIdeaToDelete(null)}
+        onConfirm={confirmDeleteIdea}
       />
 
       <AuthModal 
