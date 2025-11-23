@@ -36,7 +36,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
     pain: '',
     solution: '',
     why: '',
-    why_is_private: false, // NEW FIELD
+    why_is_private: false, // CORREÇÃO: Usando o nome correto da coluna
     pricing_model: '',
     target: '',
     sales_strategy: '',
@@ -70,7 +70,9 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
 
     onSave({
         ...formData,
-        price: formData.price ? Number(formData.price) : undefined
+        price: formData.price ? Number(formData.price) : undefined,
+        // Garante que why_is_private seja boolean
+        why_is_private: !!formData.why_is_private 
     });
     
     onClose();

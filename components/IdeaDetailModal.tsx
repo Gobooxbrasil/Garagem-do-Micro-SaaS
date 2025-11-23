@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Idea, Improvement } from '../types';
 import ShareButton from './ShareButton';
 import RequestPixModal from './modals/RequestPixModal';
-import { PurchaseModal } from './modals/PurchaseModal'; // Novo Import
+import { PurchaseModal } from './modals/PurchaseModal';
 import { supabase } from '../lib/supabaseClient';
 import { 
   X, 
@@ -346,6 +346,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Modelo de Receita</label><p className="font-semibold text-gray-800 flex items-center gap-2 mt-1"><DollarSign className="w-4 h-4 text-green-600" /> {idea.pricing_model}</p></div>
                              <div>
                                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Diferencial</label>
+                                 {/* CORREÇÃO: Usando why_is_private para lógica de exibição */}
                                  {idea.why_is_private && !isOwner ? (
                                      <p className="text-sm text-gray-400 italic mt-1 flex items-center gap-1 bg-gray-50 p-2 rounded-lg border border-gray-100"><EyeOff className="w-3 h-3"/> Oculto pelo criador</p>
                                  ) : (

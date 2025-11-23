@@ -54,7 +54,7 @@ export interface Idea {
   pain: string;
   solution: string;
   why: string;
-  why_is_private?: boolean; // Novo campo
+  why_is_private?: boolean; // CORRIGIDO: Campo correto do banco
   pricing_model: string;
   target: string;
   sales_strategy: string;
