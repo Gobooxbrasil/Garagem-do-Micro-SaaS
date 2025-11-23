@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { X, Mail, Lock, User, Loader2, ArrowLeft, ShieldCheck, FileText } from 'lucide-react';
+import { X, Mail, Lock, User, Loader2, ArrowLeft, ShieldCheck, FileText, Check } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -17,6 +17,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true); // Novo estado para "Manter conectado"
   const [showTermsText, setShowTermsText] = useState(false);
 
   // UI States
@@ -233,6 +234,23 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
           )}
 
+          {/* Keep Connected (Login Only) */}
+          {mode === 'LOGIN' && (
+            <div className="flex items-center gap-2 pt-1 pb-2 animate-in fade-in">
+                <div className="relative flex items-center">
+                    <input 
+                        type="checkbox" 
+                        id="remember"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-gray-300 transition-all checked:border-apple-blue checked:bg-apple-blue"
+                    />
+                    <Check className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white w-3 h-3 opacity-0 peer-checked:opacity-100 transition-opacity" />
+                </div>
+                <label htmlFor="remember" className="text-xs text-gray-500 cursor-pointer select-none">Manter conectado</label>
+            </div>
+          )}
+
           {/* Terms Checkbox (Signup Only) */}
           {mode === 'SIGNUP' && (
               <div className="flex items-start gap-3 py-2 animate-in slide-in-from-left-4 duration-300 delay-100">
@@ -245,9 +263,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                         className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 transition-all checked:border-apple-blue checked:bg-apple-blue"
                     />
                     <div className="pointer-events-none absolute top-2/4 left-2/4 -translate-x-2/4 -translate-y-2/4 text-white opacity-0 transition-opacity peer-checked:opacity-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" stroke="currentColor" strokeWidth="1">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                        </svg>
+                        <Check className="w-3.5 h-3.5" />
                     </div>
                   </div>
                   <label htmlFor="terms" className="text-xs text-gray-500 leading-tight">
@@ -260,7 +276,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full bg-apple-blue hover:bg-apple-blueHover text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-4 hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full bg-apple-blue hover:bg-apple-blueHover text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-2 hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                 <>

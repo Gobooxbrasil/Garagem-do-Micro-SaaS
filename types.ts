@@ -1,3 +1,4 @@
+
 export interface Idea {
   id: string;
   niche: string;
@@ -13,6 +14,7 @@ export interface Idea {
   isFavorite?: boolean; // Frontend state only
   created_at: string; // ISO Date string (Matches DB column)
   user_id?: string;
+  images?: string[];
 }
 
 export interface Review {

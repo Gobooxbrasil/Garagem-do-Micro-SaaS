@@ -8,7 +8,7 @@ import {
   Unlock, 
   Star, 
   Send, 
-  User
+  Box
 } from 'lucide-react';
 
 interface ProjectDetailProps {
@@ -18,7 +18,8 @@ interface ProjectDetailProps {
 }
 
 const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, onBack, onAddReview }) => {
-  const [activeImage, setActiveImage] = useState(project.images[0]);
+  const hasImages = project.images && project.images.length > 0 && project.images[0] !== '';
+  const [activeImage, setActiveImage] = useState(hasImages ? project.images[0] : null);
   const [showDemoData, setShowDemoData] = useState(false);
   
   // New Review State
@@ -60,20 +61,30 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ project, onBack, onAddRev
         <div className="lg:col-span-8 space-y-10">
             {/* Gallery */}
             <div className="space-y-4">
-                <div className="relative aspect-video rounded-2xl overflow-hidden bg-white shadow-soft">
-                    <img src={activeImage} alt="Main view" className="w-full h-full object-cover" />
+                <div className="relative aspect-video rounded-2xl overflow-hidden bg-white shadow-soft flex items-center justify-center bg-gray-50">
+                    {activeImage ? (
+                         <img src={activeImage} alt="Main view" className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="flex flex-col items-center gap-4 opacity-20">
+                            <Box className="w-24 h-24 text-gray-500" strokeWidth={0.5} />
+                            <span className="text-gray-400 font-medium tracking-widest uppercase text-sm">Sem Imagem</span>
+                        </div>
+                    )}
                 </div>
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                    {project.images.map((img, idx) => (
-                        <button 
-                            key={idx}
-                            onClick={() => setActiveImage(img)}
-                            className={`relative w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${activeImage === img ? 'border-apple-blue ring-2 ring-apple-blue/20' : 'border-transparent opacity-70 hover:opacity-100'}`}
-                        >
-                            <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
-                        </button>
-                    ))}
-                </div>
+                
+                {hasImages && (
+                    <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                        {project.images.map((img, idx) => (
+                            <button 
+                                key={idx}
+                                onClick={() => setActiveImage(img)}
+                                className={`relative w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${activeImage === img ? 'border-apple-blue ring-2 ring-apple-blue/20' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                            >
+                                <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Description */}

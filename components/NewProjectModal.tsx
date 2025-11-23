@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Project } from '../types';
-import { X, Upload } from 'lucide-react';
+import { X, Upload, Image as ImageIcon, Trash2, AlertCircle } from 'lucide-react';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -9,6 +9,8 @@ interface NewProjectModalProps {
 }
 
 const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSave }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     tagline: '',
@@ -17,7 +19,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
     demo_email: '',
     demo_password: '',
     maker_id: '',
-    images: ['https://picsum.photos/800/600?random=100']
+    images: [] as string[]
   });
 
   if (!isOpen) return null;
@@ -26,11 +28,59 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
     e.preventDefault();
     onSave(formData);
     onClose();
+    // Reset form
+    setFormData({
+        name: '',
+        tagline: '',
+        description: '',
+        link_url: '',
+        demo_email: '',
+        demo_password: '',
+        maker_id: '',
+        images: []
+    });
+    setError(null);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    setError(null);
+
+    // Validação de Tamanho (2MB = 2 * 1024 * 1024 bytes)
+    if (file.size > 2 * 1024 * 1024) {
+        setError('A imagem deve ter no máximo 2MB.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setFormData(prev => ({
+            ...prev,
+            images: [...prev.images, base64String]
+        }));
+    };
+    reader.readAsDataURL(file);
+    
+    // Limpar input para permitir selecionar o mesmo arquivo novamente se quiser
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  };
+
+  const removeImage = (indexToRemove: number) => {
+    setFormData(prev => ({
+        ...prev,
+        images: prev.images.filter((_, index) => index !== indexToRemove)
+    }));
   };
 
   const inputClass = "w-full bg-white border border-gray-200 rounded-xl p-3 text-apple-text focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all";
@@ -57,6 +107,58 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
         <div className="overflow-y-auto p-8 space-y-6 custom-scrollbar">
           <form id="projectForm" onSubmit={handleSubmit} className="space-y-6">
             
+            {/* Upload Section */}
+            <div>
+                <label className={labelClass}>Galeria do Projeto</label>
+                <div className="space-y-4">
+                    {/* Error Message */}
+                    {error && (
+                        <div className="flex items-center gap-2 text-red-500 text-sm bg-red-50 p-3 rounded-lg border border-red-100">
+                            <AlertCircle className="w-4 h-4" />
+                            {error}
+                        </div>
+                    )}
+
+                    <div className="flex gap-4 overflow-x-auto pb-2">
+                        {/* Upload Button */}
+                        <div 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-shrink-0 w-24 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-apple-blue hover:bg-blue-50 transition-all group"
+                        >
+                            <Upload className="w-6 h-6 text-gray-400 group-hover:text-apple-blue mb-1" />
+                            <span className="text-[10px] font-bold text-gray-400 group-hover:text-apple-blue">Adicionar</span>
+                            <span className="text-[8px] text-gray-300 group-hover:text-apple-blue/70">Max 2MB</span>
+                        </div>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                        />
+
+                        {/* Image Previews */}
+                        {formData.images.map((img, idx) => (
+                            <div key={idx} className="relative flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-gray-200 group">
+                                <img src={img} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
+                                <button 
+                                    type="button"
+                                    onClick={() => removeImage(idx)}
+                                    className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <Trash2 className="w-5 h-5 text-white" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    {formData.images.length === 0 && (
+                        <p className="text-xs text-gray-400 italic flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3" /> Caso nenhuma imagem seja enviada, usaremos uma ilustração padrão.
+                        </p>
+                    )}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className={labelClass}>Nome do Projeto</label>

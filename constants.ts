@@ -1,4 +1,28 @@
+
 import { Idea, Project } from './types';
+
+export const PRESET_NICHES = [
+  "Finanças",
+  "Saúde & Bem-estar",
+  "Pet",
+  "Educação",
+  "Produtividade",
+  "Marketing",
+  "Vendas",
+  "RH & Gestão",
+  "Jurídico",
+  "Imobiliário",
+  "Agro",
+  "Logística",
+  "Developer Tools",
+  "Creator Economy",
+  "IA & Machine Learning",
+  "E-commerce",
+  "Construção Civil",
+  "Alimentação",
+  "Transporte",
+  "Turismo"
+];
 
 export const INITIAL_IDEAS: Idea[] = [
   {
@@ -14,11 +38,12 @@ export const INITIAL_IDEAS: Idea[] = [
     votes_count: 42,
     is_building: false,
     isFavorite: false,
-    created_at: '2023-10-25T10:00:00Z'
+    created_at: '2023-10-25T10:00:00Z',
+    images: []
   },
   {
     id: '2',
-    niche: 'Pet Shop',
+    niche: 'Pet',
     title: 'VetAgenda Zap',
     pain: 'Clínicas perdem 30% dos agendamentos por no-show (cliente esquece).',
     solution: 'Sistema de agendamento que envia lembretes automáticos e confirmações via WhatsApp sem intervenção humana.',
@@ -29,7 +54,8 @@ export const INITIAL_IDEAS: Idea[] = [
     votes_count: 128,
     is_building: true,
     isFavorite: true,
-    created_at: '2023-10-28T14:30:00Z'
+    created_at: '2023-10-28T14:30:00Z',
+    images: []
   },
   {
     id: '3',
@@ -44,7 +70,8 @@ export const INITIAL_IDEAS: Idea[] = [
     votes_count: 85,
     is_building: false,
     isFavorite: false,
-    created_at: '2023-10-20T09:15:00Z'
+    created_at: '2023-10-20T09:15:00Z',
+    images: []
   },
   {
     id: '4',
@@ -59,7 +86,8 @@ export const INITIAL_IDEAS: Idea[] = [
     votes_count: 56,
     is_building: false,
     isFavorite: false,
-    created_at: '2023-11-01T11:00:00Z'
+    created_at: '2023-11-01T11:00:00Z',
+    images: []
   }
 ];
 

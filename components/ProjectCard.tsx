@@ -1,6 +1,6 @@
 import React from 'react';
 import { Project } from '../types';
-import { Star } from 'lucide-react';
+import { Star, MessageSquare, Box } from 'lucide-react';
 
 interface ProjectCardProps {
   project: Project;
@@ -10,46 +10,60 @@ interface ProjectCardProps {
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, onClick }) => {
   const averageRating = project.reviews.length 
     ? (project.reviews.reduce((acc, curr) => acc + curr.rating, 0) / project.reviews.length).toFixed(1)
-    : 'Novo';
+    : null;
+  
+  const hasImage = project.images && project.images.length > 0 && project.images[0] !== '';
 
   return (
     <div 
         onClick={() => onClick(project.id)}
-        className="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-soft hover:shadow-hover transition-all duration-500 ease-out flex flex-col h-full hover:-translate-y-1"
+        className="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300 ease-out flex flex-col h-full hover:-translate-y-1"
     >
-      <div className="relative h-56 overflow-hidden">
-        <img 
-          src={project.images[0]} 
-          alt={project.name} 
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
-        />
-        <div className="absolute top-3 right-3">
-            <div className="bg-white/90 backdrop-blur-md text-apple-text text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm">
-                <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                {averageRating}
+      <div className="relative h-40 overflow-hidden bg-gray-50">
+        {hasImage ? (
+             <img 
+             src={project.images[0]} 
+             alt={project.name} 
+             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+           />
+        ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gray-100 group-hover:bg-gray-200 transition-colors">
+                <div className="flex flex-col items-center gap-2 opacity-30">
+                     <Box className="w-12 h-12 text-gray-500" strokeWidth={1} />
+                     <div className="h-1 w-8 bg-gray-300 rounded-full"></div>
+                </div>
             </div>
-        </div>
+        )}
+       
+        {averageRating && (
+            <div className="absolute bottom-2 right-2">
+                <div className="bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                    {averageRating}
+                </div>
+            </div>
+        )}
       </div>
       
-      <div className="p-6 flex flex-col flex-grow">
-        <div className="mb-3">
-            <h3 className="text-xl font-semibold text-apple-text mb-1 group-hover:text-apple-blue transition-colors">
+      <div className="p-5 flex flex-col flex-grow">
+        <div className="mb-2">
+            <h3 className="text-lg font-bold text-apple-text mb-0.5 truncate group-hover:text-apple-blue transition-colors">
                 {project.name}
             </h3>
-            <p className="text-apple-subtext text-sm font-medium">
+            <p className="text-xs text-gray-500 font-medium truncate">
                 {project.tagline}
             </p>
         </div>
 
-        <p className="text-gray-500 text-sm leading-relaxed line-clamp-3 mb-6 flex-grow font-light">
+        <p className="text-gray-500 text-xs leading-relaxed line-clamp-2 mb-4 flex-grow font-light">
             {project.description}
         </p>
 
-        <div className="flex items-center justify-between text-xs text-gray-400 pt-4 border-t border-gray-50">
-            <span>
-                {project.reviews.length} avaliações
+        <div className="flex items-center justify-between text-[10px] text-gray-400 pt-3 border-t border-gray-50">
+            <span className="flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" /> {project.reviews.length} reviews
             </span>
-            <span className="font-medium text-gray-500">
+            <span className="font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded">
                 @{project.maker_id}
             </span>
         </div>
