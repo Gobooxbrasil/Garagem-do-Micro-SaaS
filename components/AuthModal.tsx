@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { X, Mail, Lock, User, Loader2, ArrowLeft, ShieldCheck, FileText, Check } from 'lucide-react';
@@ -17,7 +18,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true); // Novo estado para "Manter conectado"
   const [showTermsText, setShowTermsText] = useState(false);
 
   // UI States
@@ -61,7 +61,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             throw new Error("A senha deve ter no mínimo 6 caracteres.");
         }
 
-        const { error } = await supabase.auth.signUp({
+        // 1. Criar usuário na Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -72,13 +73,29 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             },
           },
         });
-        if (error) throw error;
+        
+        if (authError) throw authError;
+
+        // 2. SELF-HEALING: Criar perfil público imediatamente
+        if (authData.user) {
+            // Tentamos inserir. Se já existir (via trigger), o Supabase ignora ou retorna erro que tratamos.
+            const { error: profileError } = await supabase.from('profiles').upsert({
+                id: authData.user.id,
+                full_name: fullName,
+                email: email,
+                updated_at: new Date().toISOString()
+            });
+            
+            if (profileError) console.warn("Aviso de perfil:", profileError.message);
+        }
+
         setSuccessMsg('Conta criada! Verifique seu email para confirmar.');
+        setTimeout(() => switchMode('LOGIN'), 3000);
       } 
       
       else if (mode === 'RECOVERY') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.origin, // Redireciona de volta pro site
+            redirectTo: window.location.origin,
         });
         if (error) throw error;
         setSuccessMsg('Email de recuperação enviado. Verifique sua caixa de entrada.');
@@ -91,8 +108,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // --- UI COMPONENTS ---
-
   const renderTermsModal = () => (
     <div className="absolute inset-0 bg-white z-20 p-6 rounded-3xl flex flex-col animate-in slide-in-from-right">
         <div className="flex items-center justify-between mb-4">
@@ -104,11 +119,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </button>
         </div>
         <div className="flex-grow overflow-y-auto text-sm text-gray-600 space-y-3 pr-2 custom-scrollbar border p-4 rounded-xl border-gray-100 bg-gray-50">
-            <p><strong>1. Aceitação:</strong> Ao utilizar a Garagem do Micro SaaS, você concorda com estes termos.</p>
-            <p><strong>2. Conteúdo:</strong> Ideias e Projetos postados são de responsabilidade de seus autores. Respeite a propriedade intelectual.</p>
-            <p><strong>3. Conduta:</strong> Não toleramos spam, discurso de ódio ou conteúdo malicioso. Contas violadoras serão banidas.</p>
-            <p><strong>4. Dados:</strong> Seus dados (email, nome) são usados apenas para autenticação e funcionamento da plataforma. Não vendemos dados.</p>
-            <p><strong>5. Isenção:</strong> A plataforma é um hub de conexão. Não garantimos o sucesso financeiro de nenhuma ideia listada aqui.</p>
+            <p><strong>1. Aceitação:</strong> Ao utilizar a Garagem de Micro SaaS, você concorda com estes termos.</p>
+            <p><strong>2. Conteúdo:</strong> Ideias e Projetos postados são de responsabilidade de seus autores.</p>
+            <p><strong>3. Conduta:</strong> Não toleramos spam, discurso de ódio ou conteúdo malicioso.</p>
+            <p><strong>4. Dados:</strong> Seus dados são usados apenas para autenticação e funcionamento da plataforma.</p>
+            <p><strong>5. Isenção:</strong> A plataforma é um hub de conexão. Não garantimos sucesso financeiro.</p>
         </div>
         <button 
             onClick={() => { setShowTermsText(false); setAcceptTerms(true); }}
@@ -120,7 +135,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 relative border border-gray-200 overflow-hidden">
         
         {/* Close Button */}
@@ -135,7 +150,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         {showTermsText && renderTermsModal()}
 
         {/* Header */}
-        <div className="mb-6 text-center">
+        <div className="mb-8 text-center">
           {mode === 'LOGIN' && (
              <>
                 <h2 className="text-2xl font-bold text-apple-text">Bem-vindo de volta</h2>
@@ -144,176 +159,136 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           )}
           {mode === 'SIGNUP' && (
              <>
-                <h2 className="text-2xl font-bold text-apple-text">Junte-se à Garagem</h2>
-                <p className="text-sm text-gray-500 mt-1">Crie sua conta gratuita.</p>
+                <h2 className="text-2xl font-bold text-apple-text">Criar Conta</h2>
+                <p className="text-sm text-gray-500 mt-1">Junte-se à comunidade de builders.</p>
              </>
           )}
           {mode === 'RECOVERY' && (
-             <>
+             <div className="flex flex-col items-center">
+                <button onClick={() => switchMode('LOGIN')} className="self-start mb-4 text-gray-400 hover:text-black flex items-center gap-1 text-xs font-bold uppercase tracking-wide">
+                    <ArrowLeft className="w-3 h-3" /> Voltar
+                </button>
                 <h2 className="text-2xl font-bold text-apple-text">Recuperar Senha</h2>
-                <p className="text-sm text-gray-500 mt-1">Enviaremos um link para você.</p>
-             </>
+                <p className="text-sm text-gray-500 mt-1">Enviaremos um link para seu email.</p>
+             </div>
           )}
         </div>
 
-        {/* Status Messages */}
-        {error && (
-            <div className="mb-4 bg-red-50 text-red-600 text-sm p-3 rounded-xl border border-red-100 flex items-center gap-2">
-               <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> {error}
-            </div>
-        )}
-        {successMsg && (
-            <div className="mb-4 bg-green-50 text-green-700 text-sm p-3 rounded-xl border border-green-100 flex items-center gap-2">
-               <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> {successMsg}
-            </div>
-        )}
-
+        {/* Form */}
         <form onSubmit={handleAuth} className="space-y-4">
           
-          {/* Name Field (Signup Only) */}
-          {mode === 'SIGNUP' && (
-            <div className="space-y-1 animate-in slide-in-from-left-4 duration-300">
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Nome Completo</label>
-                <div className="relative">
-                <User className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
-                <input 
-                    type="text" 
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-apple-text focus:bg-white focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all"
-                    placeholder="João Silva"
-                />
-                </div>
+          {/* Feedback Messages */}
+          {error && (
+            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center gap-2 animate-in slide-in-from-top-2">
+                <X className="w-4 h-4" /> {error}
+            </div>
+          )}
+          {successMsg && (
+            <div className="bg-green-50 text-green-600 text-sm p-3 rounded-lg flex items-center gap-2 animate-in slide-in-from-top-2">
+                <Check className="w-4 h-4" /> {successMsg}
             </div>
           )}
 
-          {/* Email Field */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Email</label>
+          {mode === 'SIGNUP' && (
             <div className="relative">
-              <Mail className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
-              <input 
+                <User className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <input 
+                    type="text" 
+                    placeholder="Seu Nome Completo"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/10 transition-all"
+                />
+            </div>
+          )}
+
+          <div className="relative">
+            <Mail className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+            <input 
                 type="email" 
+                placeholder="seu@email.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-apple-text focus:bg-white focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all"
-                placeholder="seu@email.com"
-              />
-            </div>
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/10 transition-all"
+            />
           </div>
 
-          {/* Password Field (Not for Recovery) */}
           {mode !== 'RECOVERY' && (
-            <div className="space-y-1 animate-in fade-in">
-                <div className="flex justify-between">
-                    <label className="text-xs font-bold text-gray-500 uppercase ml-1">Senha</label>
-                    {mode === 'LOGIN' && (
-                        <button 
-                            type="button" 
-                            onClick={() => switchMode('RECOVERY')}
-                            className="text-xs text-apple-blue hover:underline"
-                        >
-                            Esqueceu?
-                        </button>
-                    )}
-                </div>
-                <div className="relative">
-                <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
+            <div className="relative">
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
                 <input 
                     type="password" 
+                    placeholder="Sua senha"
                     required
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-apple-text focus:bg-white focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all"
-                    placeholder="••••••••"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/10 transition-all"
                 />
-                </div>
             </div>
           )}
 
-          {/* Keep Connected (Login Only) */}
           {mode === 'LOGIN' && (
-            <div className="flex items-center gap-2 pt-1 pb-2 animate-in fade-in">
-                <div className="relative flex items-center">
-                    <input 
-                        type="checkbox" 
-                        id="remember"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                        className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-gray-300 transition-all checked:border-apple-blue checked:bg-apple-blue"
-                    />
-                    <Check className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white w-3 h-3 opacity-0 peer-checked:opacity-100 transition-opacity" />
-                </div>
-                <label htmlFor="remember" className="text-xs text-gray-500 cursor-pointer select-none">Manter conectado</label>
-            </div>
+             <div className="flex justify-end">
+                 <button 
+                    type="button" 
+                    onClick={() => switchMode('RECOVERY')}
+                    className="text-xs font-semibold text-apple-blue hover:underline"
+                 >
+                    Esqueceu a senha?
+                 </button>
+             </div>
           )}
 
-          {/* Terms Checkbox (Signup Only) */}
           {mode === 'SIGNUP' && (
-              <div className="flex items-start gap-3 py-2 animate-in slide-in-from-left-4 duration-300 delay-100">
+              <div className="flex items-start gap-2 pt-2">
                   <div className="relative flex items-center">
-                    <input 
+                      <input 
                         type="checkbox" 
-                        id="terms"
+                        required
                         checked={acceptTerms}
                         onChange={(e) => setAcceptTerms(e.target.checked)}
-                        className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 transition-all checked:border-apple-blue checked:bg-apple-blue"
-                    />
-                    <div className="pointer-events-none absolute top-2/4 left-2/4 -translate-x-2/4 -translate-y-2/4 text-white opacity-0 transition-opacity peer-checked:opacity-100">
-                        <Check className="w-3.5 h-3.5" />
-                    </div>
+                        className="w-4 h-4 rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
+                      />
                   </div>
-                  <label htmlFor="terms" className="text-xs text-gray-500 leading-tight">
-                      Li e concordo com os <button type="button" onClick={() => setShowTermsText(true)} className="text-apple-blue font-bold hover:underline flex items-center gap-1 inline-flex"><FileText className="w-3 h-3" /> Termos de Uso</button> e Políticas de Privacidade da Garagem.
-                  </label>
+                  <div className="text-xs text-gray-500 leading-tight">
+                      Eu aceito os <button type="button" onClick={() => setShowTermsText(true)} className="text-apple-blue font-bold hover:underline">Termos de Uso</button> e Política de Privacidade da Garagem.
+                  </div>
               </div>
           )}
 
-          {/* Submit Button */}
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full bg-apple-blue hover:bg-apple-blueHover text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 mt-2 hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full bg-black hover:bg-gray-800 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-black/10 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                <>
-                    {mode === 'LOGIN' && 'Entrar na Garagem'}
-                    {mode === 'SIGNUP' && 'Criar Conta'}
-                    {mode === 'RECOVERY' && 'Enviar Link'}
-                </>
+                mode === 'LOGIN' ? 'Entrar' : mode === 'SIGNUP' ? 'Criar Conta' : 'Enviar Link'
             )}
           </button>
         </form>
 
-        {/* Footer Navigation */}
-        <div className="mt-6 text-center border-t border-gray-100 pt-4">
-          {mode === 'LOGIN' && (
-             <p className="text-sm text-gray-500">
-                Ainda não tem conta?
-                <button onClick={() => switchMode('SIGNUP')} className="text-apple-blue font-bold ml-1 hover:underline">
-                  Cadastre-se
-                </button>
-             </p>
-          )}
-          
-          {mode === 'SIGNUP' && (
-             <p className="text-sm text-gray-500">
-                Já tem uma conta?
-                <button onClick={() => switchMode('LOGIN')} className="text-apple-blue font-bold ml-1 hover:underline">
-                  Faça Login
-                </button>
-             </p>
-          )}
-
-          {mode === 'RECOVERY' && (
-              <button onClick={() => switchMode('LOGIN')} className="text-gray-500 text-sm hover:text-black flex items-center gap-1 mx-auto">
-                  <ArrowLeft className="w-3 h-3" /> Voltar para Login
-              </button>
-          )}
+        {/* Footer Switcher */}
+        <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+            {mode === 'LOGIN' ? (
+                <p className="text-sm text-gray-500">
+                    Ainda não tem conta?{' '}
+                    <button onClick={() => switchMode('SIGNUP')} className="text-apple-blue font-bold hover:underline">
+                        Cadastre-se
+                    </button>
+                </p>
+            ) : (
+                <p className="text-sm text-gray-500">
+                    Já tem uma conta?{' '}
+                    <button onClick={() => switchMode('LOGIN')} className="text-apple-blue font-bold hover:underline">
+                        Fazer Login
+                    </button>
+                </p>
+            )}
         </div>
+
       </div>
     </div>
   );

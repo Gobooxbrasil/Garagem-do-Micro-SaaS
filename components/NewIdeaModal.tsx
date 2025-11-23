@@ -1,5 +1,4 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Idea } from '../types';
 import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search, FileCode, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info } from 'lucide-react';
@@ -18,7 +17,6 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
     <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
       <div className="bg-gray-900/95 backdrop-blur-sm text-white text-[11px] font-medium py-2.5 px-3.5 rounded-xl shadow-xl border border-white/10 relative leading-relaxed text-center">
         {text}
-        {/* Seta do tooltip */}
         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900/95"></div>
       </div>
     </div>
@@ -38,6 +36,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
     pain: '',
     solution: '',
     why: '',
+    why_is_private: false, // NEW FIELD
     pricing_model: '',
     target: '',
     sales_strategy: '',
@@ -82,6 +81,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
       pain: '',
       solution: '',
       why: '',
+      why_is_private: false,
       pricing_model: '',
       target: '',
       sales_strategy: '',
@@ -425,10 +425,25 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
 
             {/* Extra Info */}
             <div>
-               <label className={labelClass}>
-                   Diferencial (Why)
-                   <InfoTooltip text="Por que os clientes devem escolher este produto e não a concorrência? O que o torna único?" />
-               </label>
+               <div className="flex justify-between items-center">
+                   <label className={labelClass}>
+                       Diferencial (Why)
+                       <InfoTooltip text="Por que os clientes devem escolher este produto e não a concorrência? O que o torna único?" />
+                   </label>
+                   
+                   <label className="flex items-center gap-2 cursor-pointer mb-1.5">
+                        <input 
+                            type="checkbox"
+                            checked={formData.why_is_private}
+                            onChange={(e) => setFormData(prev => ({ ...prev, why_is_private: e.target.checked }))}
+                            className="rounded border-gray-300 text-apple-blue focus:ring-apple-blue"
+                        />
+                        <span className="text-xs font-bold text-gray-500 flex items-center gap-1">
+                            {formData.why_is_private ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            {formData.why_is_private ? 'Oculto' : 'Público'}
+                        </span>
+                   </label>
+               </div>
                <input required name="why" value={formData.why} onChange={handleChange} className={inputClass} placeholder="Por que isso vai funcionar?" />
             </div>
 

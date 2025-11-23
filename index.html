@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Garagem do Micro SaaS</title>
+    <title>Garagem de Micro SaaS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -27,6 +28,12 @@
             boxShadow: {
               'soft': '0 4px 20px rgba(0,0,0,0.04)',
               'hover': '0 10px 25px rgba(0,0,0,0.06)',
+            },
+            keyframes: {
+              progress: {
+                '0%': { width: '0%' },
+                '100%': { width: '100%' },
+              }
             }
           }
         }
@@ -63,7 +70,9 @@
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
     "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.84.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.4"
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@tanstack/react-query": "https://aistudiocdn.com/@tanstack/react-query@^5.90.10",
+    "@tanstack/react-query-devtools": "https://aistudiocdn.com/@tanstack/react-query-devtools@^5.91.0"
   }
 }
 </script>

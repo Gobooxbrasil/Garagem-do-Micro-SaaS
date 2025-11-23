@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   ArrowRight, 
@@ -73,7 +74,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn 
                     <Rocket className="w-5 h-5" />
                     Entrar na Garagem
                 </button>
-                <button className="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-gray-900 px-8 py-4 rounded-full font-semibold text-lg transition-colors">
+                <button 
+                    onClick={onEnter}
+                    className="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-gray-900 px-8 py-4 rounded-full font-semibold text-lg transition-colors"
+                >
                     Ver Projetos
                 </button>
             </div>
@@ -159,7 +163,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn 
                             <CheckCircle className="w-5 h-5 text-green-400" /> Conexão direta com Founders
                         </li>
                     </ul>
-                    <button onClick={onEnter} className="mt-4 bg-white text-black px-8 py-3 rounded-full font-bold hover:bg-gray-200 transition-colors inline-block">
+                    <button onClick={onLogin} className="mt-4 bg-white text-black px-8 py-3 rounded-full font-bold hover:bg-gray-200 transition-colors inline-block">
                         Criar Conta Gratuita
                     </button>
                 </div>
@@ -191,7 +195,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn 
                 <span className="font-bold text-lg">Garagem</span>
             </div>
             <div className="text-sm text-gray-500">
-                © 2023 Garagem do Micro SaaS. Feito por Builders.
+                © 2023 Garagem de Micro SaaS. Feito por Builders.
             </div>
             <div className="flex gap-6">
                 <a href="#" className="text-gray-400 hover:text-black transition-colors"><ShieldCheck className="w-5 h-5" /></a>

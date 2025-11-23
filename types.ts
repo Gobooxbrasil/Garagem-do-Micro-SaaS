@@ -54,6 +54,7 @@ export interface Idea {
   pain: string;
   solution: string;
   why: string;
+  why_is_private?: boolean; // Novo campo
   pricing_model: string;
   target: string;
   sales_strategy: string;
@@ -82,6 +83,7 @@ export interface Idea {
   profiles?: {
     full_name: string;
     avatar_url: string;
+    pix_key?: string; // Needed for check
   };
 
   // New Relations
@@ -128,13 +130,14 @@ export interface Notification {
   recipient_id: string;
   sender_id: string;
   sender_email?: string;
-  type: 'PDR_REQUEST' | 'SYSTEM' | 'NEW_IMPROVEMENT' | 'NEW_DEV' | 'NEW_VOTE' | 'NEW_INTEREST' | 'NEW_DONATION' | 'NEW_PURCHASE' | 'COMMENT_REPLY';
+  type: 'PDR_REQUEST' | 'SYSTEM' | 'NEW_IMPROVEMENT' | 'NEW_DEV' | 'NEW_VOTE' | 'NEW_INTEREST' | 'NEW_DONATION' | 'NEW_PURCHASE' | 'COMMENT_REPLY' | 'PIX_REQUEST';
   read: boolean;
   payload: {
     idea_id?: string;
     idea_title?: string;
     message?: string;
     user_name?: string;
+    user_avatar?: string;
     amount?: number;
   };
 }

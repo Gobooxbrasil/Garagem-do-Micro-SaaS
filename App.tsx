@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { ViewState, Idea, Project, Notification } from './types';
 import { INITIAL_IDEAS, INITIAL_PROJECTS } from './constants';
@@ -13,6 +13,13 @@ import AuthModal from './components/AuthModal';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import LandingPage from './components/LandingPage';
 import ProfileView from './components/ProfileView'; 
+import { useIdeas, useUserInteractions, useProjects, useNotifications } from './hooks/use-ideas-cache';
+import { useVoteIdea, useToggleFavorite, useAddImprovement, useJoinInterest } from './hooks/use-mutations';
+import { usePrefetch } from './hooks/use-prefetch';
+import { useQueryClient } from '@tanstack/react-query';
+import { CACHE_KEYS } from './lib/cache-keys';
+import { IdeasListSkeleton, ActionLoader } from './components/ui/LoadingStates';
+
 import { 
   Layers, 
   Plus, 
@@ -24,11 +31,9 @@ import {
   UserCircle,
   Search,
   Heart,
-  Database,
   User,
   Bell,
-  Flame,
-  MoreVertical
+  Flame
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -36,16 +41,21 @@ const App: React.FC = () => {
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [viewState, setViewState] = useState<ViewState>({ type: 'LANDING' });
+  const queryClient = useQueryClient();
   
-  // DATA STATES
-  const [ideas, setIdeas] = useState<Idea[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // React Query Hooks
+  const { data: rawIdeas, isLoading: ideasLoading } = useIdeas();
+  const { data: projectsData, isLoading: projectsLoading } = useProjects();
+  const { data: userInteractions } = useUserInteractions(session?.user?.id);
+  const { data: notificationsData } = useNotifications(session?.user?.id);
   
-  // ERROR / OFFLINE STATES
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  
+  // Mutations
+  const voteMutation = useVoteIdea();
+  const favMutation = useToggleFavorite();
+  const improvementMutation = useAddImprovement();
+  const joinMutation = useJoinInterest();
+  const { prefetchIdeaDetail } = usePrefetch();
+
   // MODAL STATES
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isIdeaModalOpen, setIsIdeaModalOpen] = useState(false);
@@ -56,8 +66,7 @@ const App: React.FC = () => {
   
   // DELETE CONFIRMATION STATE
   const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
-  
-  const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null);
+  const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
 
   // FILTER & VIEW STATES
   const [selectedNiche, setSelectedNiche] = useState<string>('Todos');
@@ -65,33 +74,70 @@ const App: React.FC = () => {
   const [ideasViewMode, setIdeasViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [showMostVotedOnly, setShowMostVotedOnly] = useState(false); // Novo filtro
+  const [showMostVotedOnly, setShowMostVotedOnly] = useState(false); 
   const [showMyIdeasOnly, setShowMyIdeasOnly] = useState(false);
 
-  // ================= EFFECT 1: AUTH SETUP =================
+  // ================= MIDDLEWARE LOGIC (AUTH GUARD) =================
+  // Se tentar acessar páginas protegidas sem sessão, joga pra Landing/Auth
+  useEffect(() => {
+      if (!isAuthChecking) {
+          const protectedTypes = ['IDEAS', 'SHOWROOM', 'PROJECT_DETAIL', 'PROFILE'];
+          if (!session && protectedTypes.includes(viewState.type)) {
+              setViewState({ type: 'LANDING' });
+              setIsAuthModalOpen(true);
+          }
+      }
+  }, [viewState.type, session, isAuthChecking]);
+
+  // ================= URL ROUTING LOGIC (SHARE LINKS) =================
+  useEffect(() => {
+      // Check for ?idea=ID in URL on mount
+      const params = new URLSearchParams(window.location.search);
+      const sharedIdeaId = params.get('idea');
+      if (sharedIdeaId) {
+          setSelectedIdeaId(sharedIdeaId);
+          // Limpa URL
+          window.history.replaceState({}, '', window.location.pathname);
+      }
+  }, []);
+
+
+  // Merging Data with User Interactions locally for display
+  const ideas = useMemo(() => {
+     if (!rawIdeas) return [];
+     if (!session) return rawIdeas;
+
+     return rawIdeas.map(idea => ({
+         ...idea,
+         hasVoted: userInteractions?.votes.has(idea.id),
+         isFavorite: userInteractions?.favorites.has(idea.id),
+         isInterested: userInteractions?.interests.has(idea.id)
+     }));
+  }, [rawIdeas, userInteractions, session]);
+
+  const selectedIdea = useMemo(() => {
+     return ideas.find(i => i.id === selectedIdeaId) || null;
+  }, [ideas, selectedIdeaId]);
+
+  // ================= EFFECT: AUTH SETUP =================
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
          setViewState({ type: 'IDEAS' });
-         fetchNotifications(session.user.id);
          fetchUserAvatar(session.user.id);
       }
     }).finally(() => {
       setIsAuthChecking(false);
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
           setViewState(prev => prev.type === 'LANDING' ? { type: 'IDEAS' } : prev);
-          fetchNotifications(session.user.id);
           fetchUserAvatar(session.user.id);
       } else {
           setViewState({ type: 'LANDING' });
-          setNotifications([]);
           setUserAvatar(null);
       }
     });
@@ -99,7 +145,6 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Click outside profile menu to close
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
           if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
@@ -112,169 +157,26 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
       await supabase.auth.signOut();
+      queryClient.clear(); // Limpa cache ao sair
       setViewState({ type: 'LANDING' });
       setShowProfileMenu(false);
   };
 
-  // ================= NOTIFICATIONS & USER LOGIC =================
-  const fetchNotifications = async (userId: string) => {
-      if (isOfflineMode) return;
-      try {
-          const { data, error } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('recipient_id', userId)
-            .order('created_at', { ascending: false });
-            
-          if (!error && data) {
-              setNotifications(data as any);
-          }
-      } catch (err) {
-          console.warn("Tabela de notificações pode não existir ainda.");
-      }
-  };
-
   const fetchUserAvatar = async (userId: string) => {
-      if (isOfflineMode) return;
       try {
-          const { data } = await supabase
-            .from('profiles')
-            .select('avatar_url')
-            .eq('id', userId)
-            .single();
-          
-          if (data?.avatar_url) {
-              setUserAvatar(data.avatar_url);
-          }
-      } catch (error) {
-          console.error("Erro ao buscar avatar", error);
-      }
+          const { data } = await supabase.from('profiles').select('avatar_url').eq('id', userId).single();
+          if (data?.avatar_url) setUserAvatar(data.avatar_url);
+      } catch (error) { console.error(error); }
   };
 
   const markNotificationAsRead = async (id: string) => {
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-      if (!isOfflineMode) {
-        await supabase.from('notifications').update({ read: true }).eq('id', id);
-      }
+      await supabase.from('notifications').update({ read: true }).eq('id', id);
+      queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id) });
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  // ================= DATA FETCHING LOGIC =================
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    setIsOfflineMode(false);
-    
-    try {
-      // --- FETCH IDEAS ---
-      let ideasData: any[] | null = null;
-      
-      // Fetch com relations novas (Votes, Interested, Transactions)
-      const result = await supabase
-        .from('ideas')
-        .select(`
-            *, 
-            profiles(full_name, avatar_url),
-            idea_interested(id, user_id, created_at, profiles(full_name, avatar_url)),
-            idea_improvements(id, user_id, content, created_at, parent_id, thread_level, profiles(full_name, avatar_url)),
-            idea_transactions(id, user_id, transaction_type, amount, status, created_at, profiles(full_name, avatar_url))
-        `)
-        .order('created_at', { ascending: false });
-        
-      if (result.error) throw result.error;
-      ideasData = result.data;
-
-      // Process Data
-      let processedIdeas: Idea[] = (ideasData as any[])?.map(i => ({
-          ...i,
-          idea_interested: i.idea_interested || [],
-          idea_improvements: i.idea_improvements?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [],
-          idea_transactions: i.idea_transactions || [],
-          // Normalizar payment_type do DB para o app se necessário
-          payment_type: i.payment_type || 'free'
-      })) || [];
-      
-      if (processedIdeas.length > 0 && session?.user) {
-         try {
-            // 1. Fetch Favorites
-            const { data: favs } = await supabase
-                .from('favorites')
-                .select('idea_id')
-                .eq('user_id', session.user.id);
-            
-            // 2. Fetch Votes (To check if user already voted)
-            const { data: myVotes } = await supabase
-                .from('idea_votes')
-                .select('idea_id')
-                .eq('user_id', session.user.id);
-            
-            // 3. Fetch Interest (To check if user is interested)
-            const { data: myInterests } = await supabase
-                .from('idea_interested')
-                .select('idea_id')
-                .eq('user_id', session.user.id);
-
-            const favIds = new Set(favs?.map((f: any) => f.idea_id));
-            const voteIds = new Set(myVotes?.map((v: any) => v.idea_id));
-            const interestIds = new Set(myInterests?.map((i: any) => i.idea_id));
-
-            processedIdeas = processedIdeas.map((i: Idea) => ({
-                ...i,
-                isFavorite: favIds.has(i.id),
-                hasVoted: voteIds.has(i.id),
-                isInterested: interestIds.has(i.id)
-            }));
-         } catch (err) { console.warn("Erro ao buscar metadados do usuário"); }
-      }
-      
-      setIdeas(processedIdeas);
-
-      // Se houver uma ideia selecionada, atualize-a com os novos dados para manter o modal sincronizado
-      if (selectedIdea) {
-         const updatedSelected = processedIdeas.find(i => i.id === selectedIdea.id);
-         if (updatedSelected) setSelectedIdea(updatedSelected);
-      }
-      
-      // --- FETCH PROJECTS ---
-      const { data: projectsData, error: projError } = await supabase
-        .from('projects')
-        .select(`*, reviews (*), profiles(full_name, avatar_url)`)
-        .order('created_at', { ascending: false });
-        
-      if (projError) throw projError;
-      
-      if (projectsData && projectsData.length > 0) {
-          setProjects(projectsData);
-      } else {
-          setProjects([]);
-      }
-
-    } catch (error: any) {
-      console.warn("Erro ao buscar dados.", error);
-      setIsOfflineMode(true);
-      setIdeas(INITIAL_IDEAS);
-      setProjects(INITIAL_PROJECTS);
-    }
-
-    setIsLoading(false);
-  }, [session, selectedIdea?.id]); // Dependência segura
-
-  // ================= EFFECT 2: TRIGGER FETCH =================
-  useEffect(() => {
-    if ((viewState.type === 'IDEAS' || viewState.type === 'SHOWROOM') && !isAuthChecking) {
-        fetchData();
-    }
-  }, [viewState.type, isAuthChecking, fetchData]);
+  const unreadCount = notificationsData?.filter(n => !n.read).length || 0;
 
   // ================= ACTIONS =================
-  
-  const handleOfflineAction = () => {
-      if (isOfflineMode) {
-          alert("FUNCIONALIDADE INDISPONÍVEL.\n\nVerifique a conexão com o Supabase.");
-          return true;
-      }
-      return false;
-  };
   const requireAuth = () => {
     if (!session) {
       setIsAuthModalOpen(true);
@@ -283,223 +185,96 @@ const App: React.FC = () => {
     return true;
   };
 
-  const handleUpvote = async (id: string) => {
-    if (handleOfflineAction()) return;
+  const handleUpvote = (id: string) => {
     if (!requireAuth()) return;
-    
-    const currentIdea = ideas.find(i => i.id === id);
-    if (!currentIdea || currentIdea.hasVoted) return;
-    
-    // Optimistic Update
-    const newCount = currentIdea.votes_count + 1;
-    const updatedIdeas = ideas.map(idea => 
-        idea.id === id ? { ...idea, votes_count: newCount, hasVoted: true } : idea
-    );
-    setIdeas(updatedIdeas);
-    if (selectedIdea && selectedIdea.id === id) setSelectedIdea({ ...selectedIdea, votes_count: newCount, hasVoted: true });
-
-    try {
-        // Insert into idea_votes table
-        const { error } = await supabase.from('idea_votes').insert({
-            idea_id: id,
-            user_id: session.user.id
-        });
-        if (error) throw error;
-    } catch (error) {
-        console.error(error);
-        // Revert on error logic would go here
-        fetchData();
-    }
+    voteMutation.mutate({ ideaId: id, userId: session.user.id });
   };
 
-  const handleToggleFavorite = async (id: string) => {
-    if (handleOfflineAction()) return;
+  const handleToggleFavorite = (id: string) => {
     if (!requireAuth()) return;
     const idea = ideas.find(i => i.id === id);
-    const isFav = idea?.isFavorite;
-
-    const updatedIdeas = ideas.map(i => 
-        i.id === id ? { ...i, isFavorite: !isFav } : i
-    );
-    setIdeas(updatedIdeas);
-    if (selectedIdea && selectedIdea.id === id) setSelectedIdea({ ...selectedIdea, isFavorite: !isFav });
-
-    try {
-      if (isFav) {
-        await supabase.from('favorites').delete().match({ user_id: session.user.id, idea_id: id });
-      } else {
-        await supabase.from('favorites').insert({ user_id: session.user.id, idea_id: id });
-      }
-    } catch (error) {
-        console.error(error);
-        fetchData();
+    if(idea) {
+        favMutation.mutate({ ideaId: id, userId: session.user.id, isFavorite: !!idea.isFavorite });
     }
   };
 
   const handleInterested = async (id: string) => {
-    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
-
-    const idea = ideas.find(i => i.id === id);
-    if (!idea || idea.isInterested) return;
-
-    try {
-        const { data, error } = await supabase.from('idea_interested').insert({
-            idea_id: id,
-            user_id: session.user.id
-        }).select('*, profiles(*)').single();
-
-        if (error) throw error;
-
-        // Notification handled by trigger or manual below if trigger not set for interested
-        if (idea.user_id && idea.user_id !== session.user.id) {
-            await supabase.from('notifications').insert({
-                recipient_id: idea.user_id,
-                sender_id: session.user.id,
-                type: 'NEW_INTEREST',
-                payload: {
-                    idea_id: id,
-                    idea_title: idea.title,
-                    user_name: session.user.user_metadata?.full_name
-                }
-            });
-        }
-
-        fetchData(); // Refresh to get new list
-
-    } catch (error: any) {
-        if (error.code === '23505') {
-            alert("Você já demonstrou interesse!");
-        } else {
-            alert(`Erro: ${error.message}`);
-        }
-    }
+    joinMutation.mutate({ ideaId: id, userId: session.user.id });
   };
 
   const handleAddImprovement = async (id: string, content: string, parentId?: string) => {
-      if (handleOfflineAction()) return;
       if (!requireAuth()) return;
-
-      const idea = ideas.find(i => i.id === id);
-      if (!idea) return;
-
-      try {
-          const { data, error } = await supabase.from('idea_improvements').insert({
-              idea_id: id,
-              user_id: session.user.id,
-              content: content,
-              parent_id: parentId || null
-          }).select('*, profiles(*)').single();
-
-          if (error) throw error;
-          
-          // Notificar dono ou parente
-          if (parentId) {
-             // Lógica para notificar quem recebeu resposta (complexo sem saber o user do parent_id, melhor deixar simplificado ou buscar parent)
-          } else if (idea.user_id !== session.user.id) {
-               await supabase.from('notifications').insert({
-                recipient_id: idea.user_id,
-                sender_id: session.user.id,
-                type: 'NEW_IMPROVEMENT',
-                payload: {
-                    idea_id: id,
-                    idea_title: idea.title,
-                    message: content.substring(0, 50) + '...'
-                }
-            });
-          }
-
-          fetchData();
-
-      } catch (error: any) {
-          console.error(error);
-          alert("Erro ao enviar comentário.");
-      }
+      await improvementMutation.mutateAsync({ ideaId: id, userId: session.user.id, content, parentId });
   };
 
   const handleAddIdea = async (ideaData: any) => {
-    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
-    
-    // Mapear payment_type correctly
     const paymentType = ideaData.monetization_type === 'PAID' ? 'paid' : 
                         ideaData.monetization_type === 'DONATION' ? 'donation' : 'free';
 
-    const { data, error } = await supabase.from('ideas').insert({
+    const { error } = await supabase.from('ideas').insert({
       ...ideaData,
       payment_type: paymentType,
       user_id: session.user.id,
       votes_count: 0,
-      is_building: false
-    }).select('*, profiles(full_name, avatar_url)').single(); 
+      is_building: false,
+      // Gerar short_id simples
+      short_id: Math.random().toString(36).substring(2, 8).toUpperCase()
+    }); 
 
-    if (data && !error) {
-      fetchData();
+    if (!error) {
+      queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
       setShowMyIdeasOnly(true);
     } else {
-        alert(`ERRO AO SALVAR: ${error?.message || JSON.stringify(error)}`);
+        alert(`Erro: ${error.message}`);
     }
   };
 
   const handleRequestPdr = async (ideaId: string, ownerId: string, ideaTitle: string, message: string) => {
-      if (handleOfflineAction()) return;
       if (!requireAuth()) return;
-
-      const { error } = await supabase.from('notifications').insert({
+      await supabase.from('notifications').insert({
           recipient_id: ownerId,
           sender_id: session.user.id,
           sender_email: session.user.email,
           type: 'PDR_REQUEST',
-          payload: {
-              idea_id: ideaId,
-              idea_title: ideaTitle,
-              message: message
-          }
+          payload: { idea_id: ideaId, idea_title: ideaTitle, message: message }
       });
-
-      if (error) throw error;
   };
 
   const handleAddProject = async (newProjectData: any) => {
-    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
-    
-    const { data, error } = await supabase.from('projects').insert({
+    const { error } = await supabase.from('projects').insert({
       ...newProjectData,
       user_id: session.user.id,
       images: newProjectData.images 
-    }).select('*, profiles(full_name, avatar_url)').single();
+    });
 
-    if (data && !error) {
-        fetchData();
+    if (!error) {
+        queryClient.invalidateQueries({ queryKey: CACHE_KEYS.projects.list() });
         setViewState({ type: 'SHOWROOM' });
     } else {
-        alert(`ERRO AO SALVAR PROJETO: ${error?.message}`);
+        alert(`Erro: ${error.message}`);
     }
   };
 
   const handleAddReview = async (projectId: string, reviewData: any) => {
-    if (handleOfflineAction()) return;
     if (!requireAuth()) return;
-    const { data, error } = await supabase.from('reviews').insert({
+    const { error } = await supabase.from('reviews').insert({
         project_id: projectId,
         ...reviewData,
         user_id: session.user.id
-    }).select().single();
-
-    if (data && !error) {
-        setProjects(prev => prev.map(p => 
-            p.id === projectId ? { ...p, reviews: [data, ...(p.reviews || [])] } : p
-        ));
-    } else {
-        alert(`Erro ao enviar review: ${error?.message}`);
+    });
+    if (!error) {
+        queryClient.invalidateQueries({ queryKey: CACHE_KEYS.projects.list() });
     }
   };
 
   const niches = useMemo(() => {
-    const allNiches = ideas.map(i => i.niche);
+    if (!rawIdeas) return ['Todos'];
+    const allNiches = rawIdeas.map(i => i.niche);
     return ['Todos', ...Array.from(new Set(allNiches))];
-  }, [ideas]);
+  }, [rawIdeas]);
 
   const filteredIdeas = useMemo(() => {
     let result = [...ideas];
@@ -533,7 +308,6 @@ const App: React.FC = () => {
   }, [ideas, selectedNiche, sortBy, searchQuery, showFavoritesOnly, showMyIdeasOnly, showMostVotedOnly, session]);
 
   const promptDeleteIdea = (id: string) => {
-      if (handleOfflineAction()) return;
       if (!requireAuth()) return;
       setIdeaToDelete(id);
   };
@@ -541,30 +315,43 @@ const App: React.FC = () => {
   const confirmDeleteIdea = async () => {
       const id = ideaToDelete;
       if (!id || !session) return;
-      if (handleOfflineAction()) {
-          setIdeaToDelete(null);
-          return;
-      }
       setIdeaToDelete(null); 
-      
       try {
           const { error } = await supabase.from('ideas').delete().eq('id', id);
           if (error) throw error;
-          setIdeas(prev => prev.filter(i => i.id !== id));
-          if (selectedIdea?.id === id) setSelectedIdea(null);
+          queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+          if (selectedIdeaId === id) setSelectedIdeaId(null);
       } catch (error: any) {
-          console.error('Erro ao deletar:', error);
-          alert(`❌ FALHA AO EXCLUIR:\n\n${error.message}`);
+          alert(`Falha ao excluir: ${error.message}`);
       }
   };
 
   // --- RENDER RETURN ---
   if (viewState.type === 'LANDING') {
-    return <LandingPage onEnter={() => setViewState({ type: 'IDEAS' })} onLogin={() => setIsAuthModalOpen(true)} isLoggedIn={!!session} />;
+    return (
+      <>
+        <LandingPage 
+          onEnter={() => {
+              if(session) setViewState({ type: 'IDEAS' });
+              else setIsAuthModalOpen(true);
+          }} 
+          onLogin={() => setIsAuthModalOpen(true)} 
+          isLoggedIn={!!session} 
+        />
+        <AuthModal 
+          isOpen={isAuthModalOpen} 
+          onClose={() => setIsAuthModalOpen(false)} 
+        />
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen bg-apple-bg font-sans text-apple-text selection:bg-apple-blue selection:text-white pb-20">
+      
+      {/* Global Loader for actions */}
+      {voteMutation.isPending && <ActionLoader message="Computando voto..." />}
+      {joinMutation.isPending && <ActionLoader message="Registrando interesse..." />}
       
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-md border-b border-gray-200/50">
@@ -576,7 +363,7 @@ const App: React.FC = () => {
             <div className="w-9 h-9 bg-black rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
               <Layers className="text-white w-5 h-5" strokeWidth={2} />
             </div>
-            <span className="text-lg font-bold tracking-tight hidden md:inline">Garagem <span className="text-gray-400 font-normal text-xs uppercase tracking-widest ml-1">do Micro SaaS</span></span>
+            <span className="text-lg font-bold tracking-tight hidden md:inline">Garagem <span className="text-gray-400 font-normal text-xs uppercase tracking-widest ml-1">de Micro SaaS</span></span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -615,10 +402,10 @@ const App: React.FC = () => {
                              {unreadCount > 0 && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">{unreadCount} novas</span>}
                          </div>
                          <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                             {notifications.length === 0 ? (
+                             {!notificationsData || notificationsData.length === 0 ? (
                                  <div className="p-8 text-center text-gray-400 text-sm">Nenhuma notificação.</div>
                              ) : (
-                                 notifications.map(notif => (
+                                 notificationsData.map(notif => (
                                      <div 
                                         key={notif.id} 
                                         onClick={() => markNotificationAsRead(notif.id)}
@@ -629,12 +416,17 @@ const App: React.FC = () => {
                                              <div>
                                                  <p className="text-xs text-gray-400 mb-1">{new Date(notif.created_at).toLocaleDateString()}</p>
                                                  <p className="text-sm text-gray-700">
-                                                     {notif.type === 'NEW_VOTE' && `Novo voto na sua ideia ${notif.payload.idea_title}.`}
-                                                     {notif.type === 'NEW_INTEREST' && `${notif.payload.user_name} tem interesse no seu projeto!`}
-                                                     {notif.type === 'NEW_DONATION' && `💰 Você recebeu uma doação de R$ ${notif.payload.amount}!`}
-                                                     {notif.type === 'COMMENT_REPLY' && `Alguém respondeu seu comentário.`}
-                                                     {notif.type === 'PDR_REQUEST' && `Solicitação de PDR para ${notif.payload.idea_title}.`}
+                                                     {notif.type === 'NEW_VOTE' && `Novo voto na sua ideia.`}
+                                                     {notif.type === 'NEW_INTEREST' && `Novo interessado no seu projeto!`}
+                                                     {notif.type === 'NEW_DONATION' && `💰 Você recebeu uma doação!`}
+                                                     {notif.type === 'PIX_REQUEST' && notif.payload?.message}
+                                                     {notif.type === 'SYSTEM' && notif.payload?.message}
+                                                     {/* Fallback for other types */}
+                                                     {!['NEW_VOTE', 'NEW_INTEREST', 'NEW_DONATION', 'SYSTEM', 'PIX_REQUEST'].includes(notif.type) && 'Nova interação.'}
                                                  </p>
+                                                 {notif.type === 'PIX_REQUEST' && (
+                                                     <button onClick={() => setViewState({type: 'PROFILE'})} className="mt-2 text-xs bg-black text-white px-3 py-1 rounded-md">Configurar Pix</button>
+                                                 )}
                                              </div>
                                          </div>
                                      </div>
@@ -711,7 +503,7 @@ const App: React.FC = () => {
         {/* --- VIEW: PROJECT DETAIL --- */}
         {viewState.type === 'PROJECT_DETAIL' && (
             <ProjectDetail 
-                project={projects.find(p => p.id === viewState.projectId)!} 
+                project={projectsData?.find(p => p.id === viewState.projectId)!} 
                 onBack={() => setViewState({ type: 'SHOWROOM' })}
                 onAddReview={handleAddReview}
             />
@@ -759,7 +551,6 @@ const App: React.FC = () => {
                         <div>
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Filtros</h3>
                             <div className="space-y-2">
-                                {/* Mais Votados */}
                                 <button 
                                     onClick={() => { setShowMostVotedOnly(!showMostVotedOnly); setShowFavoritesOnly(false); }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${showMostVotedOnly ? 'bg-orange-50 text-orange-600 shadow-sm border border-orange-100' : 'text-gray-600 hover:bg-gray-100'}`}
@@ -768,7 +559,6 @@ const App: React.FC = () => {
                                     Mais Votados
                                 </button>
 
-                                {/* Meus Favoritos */}
                                 <button 
                                     onClick={() => { if(requireAuth()) { setShowFavoritesOnly(!showFavoritesOnly); setShowMostVotedOnly(false); } }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${showFavoritesOnly ? 'bg-red-50 text-red-600 shadow-sm border border-red-100' : 'text-gray-600 hover:bg-gray-100'}`}
@@ -838,12 +628,8 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Grid */}
-                        {isLoading ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {[1,2,3,4].map(i => (
-                                    <div key={i} className="h-72 bg-gray-100 rounded-2xl animate-pulse"></div>
-                                ))}
-                            </div>
+                        {ideasLoading ? (
+                            <IdeasListSkeleton />
                         ) : (
                             <div className={`grid gap-6 ${ideasViewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                                 {filteredIdeas.map((idea) => (
@@ -854,19 +640,13 @@ const App: React.FC = () => {
                                         onToggleFavorite={handleToggleFavorite}
                                         onDelete={promptDeleteIdea}
                                         viewMode={ideasViewMode}
-                                        onClick={setSelectedIdea}
+                                        onClick={(idea) => {
+                                            setSelectedIdeaId(idea.id);
+                                            prefetchIdeaDetail(idea.id); // Prefetch on click/select
+                                        }}
                                         currentUserId={session?.user?.id}
                                     />
                                 ))}
-                                {filteredIdeas.length === 0 && (
-                                    <div className="col-span-full py-32 text-center text-gray-400 flex flex-col items-center justify-center border-2 border-dashed border-gray-100 rounded-3xl">
-                                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                            <Search className="w-8 h-8 text-gray-300" />
-                                        </div>
-                                        <h3 className="text-lg font-bold text-gray-600">Nenhum resultado</h3>
-                                        <p className="text-sm">Tente ajustar os filtros ou busque por outro termo.</p>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
@@ -893,21 +673,16 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-                    {projects.map(project => (
-                        <ProjectCard 
-                            key={project.id} 
-                            project={project} 
-                            onClick={(id) => setViewState({ type: 'PROJECT_DETAIL', projectId: id })}
-                        />
-                    ))}
-                    {projects.length === 0 && (
-                         <div className="col-span-full py-20 text-center text-gray-400 flex flex-col items-center">
-                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                <Layers className="w-8 h-8 text-gray-300" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-600">Showroom Vazio</h3>
-                            <p className="text-sm">Seja o primeiro a lançar seu MVP aqui.</p>
-                        </div>
+                    {projectsLoading ? (
+                         <IdeasListSkeleton />
+                    ) : (
+                        projectsData?.map(project => (
+                            <ProjectCard 
+                                key={project.id} 
+                                project={project} 
+                                onClick={(id) => setViewState({ type: 'PROJECT_DETAIL', projectId: id })}
+                            />
+                        ))
                     )}
                 </div>
             </>
@@ -931,13 +706,17 @@ const App: React.FC = () => {
       <IdeaDetailModal
         idea={selectedIdea}
         currentUserId={session?.user?.id}
-        onClose={() => setSelectedIdea(null)}
+        currentUserData={{ 
+            name: session?.user?.user_metadata?.full_name || 'Usuário',
+            avatar: userAvatar || undefined
+        }}
+        onClose={() => setSelectedIdeaId(null)}
         onUpvote={handleUpvote}
         onToggleFavorite={handleToggleFavorite}
         onRequestPdr={handleRequestPdr}
         onJoinTeam={handleInterested}
         onAddImprovement={handleAddImprovement}
-        refreshData={fetchData}
+        refreshData={() => queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(selectedIdeaId!) })}
       />
 
       <AuthModal 

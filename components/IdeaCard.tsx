@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Idea } from '../types';
+import ShareButton from './ShareButton';
 import { 
   Heart,
   Flame,
@@ -150,6 +151,7 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
+            <ShareButton idea={idea} variant="card" />
             {isOwner && onDelete && (
                 <button 
                     onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
@@ -193,6 +195,7 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
         
         {/* Actions Top Right (RIGHT SIDE) */}
         <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+             <ShareButton idea={idea} variant="card" />
              {isOwner && onDelete && (
                  <button 
                     onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
