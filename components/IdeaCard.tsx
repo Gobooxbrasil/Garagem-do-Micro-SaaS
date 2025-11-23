@@ -28,7 +28,6 @@ import {
 interface IdeaCardProps {
   idea: Idea;
   onUpvote: (id: string) => void;
-  onToggleBuild: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onDelete?: (id: string) => void;
   viewMode: 'grid' | 'list';
@@ -73,14 +72,14 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const VisualIcon = visuals.icon;
 
   const renderMonetizationBadge = () => {
-    if (idea.monetization_type === 'PAID') {
+    if (idea.payment_type === 'paid') {
         return (
             <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
                 <Lock className="w-3 h-3" /> R$ {idea.price}
             </div>
         );
     }
-    if (idea.monetization_type === 'DONATION') {
+    if (idea.payment_type === 'donation') {
         return (
             <div className="bg-blue-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
                 <Gift className="w-3 h-3" /> Apoiar
@@ -138,7 +137,7 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 ${visuals.bg} ${visuals.text.replace('text-', 'text-opacity-80 text-')}`}>
               {idea.niche}
             </span>
-            {idea.monetization_type === 'PAID' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
+            {idea.payment_type === 'paid' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
             {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
           </div>
           <h3 className="text-base font-bold text-apple-text truncate">{idea.title}</h3>
@@ -181,15 +180,15 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
              </div>
         )}
         
-        {/* Gradient Overlay (Suave para visibilidade dos ícones) */}
+        {/* Gradient Overlay */}
         <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
         
-        {/* Overlaid Tags (LEFT SIDE) - Included Monetization Badge Here */}
+        {/* Overlaid Tags (LEFT SIDE) */}
         <div className="absolute top-3 left-3 flex gap-2 z-20">
+             {renderMonetizationBadge()}
             <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
               {idea.niche}
             </span>
-            {renderMonetizationBadge()}
         </div>
         
         {/* Actions Top Right (RIGHT SIDE) */}
@@ -230,10 +229,15 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
             <div className="flex items-center gap-3">
                 <button 
                     onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
-                    className={`flex items-center gap-1.5 transition-colors bg-gray-50 hover:bg-gray-100 px-2 py-1 rounded-lg ${hasVotes ? 'text-orange-600' : 'text-gray-400'}`}
-                    title="Votar nesta ideia"
+                    disabled={idea.hasVoted}
+                    className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${
+                        idea.hasVoted 
+                        ? 'bg-orange-100 text-orange-600 cursor-default' 
+                        : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
+                    }`}
+                    title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
                 >
-                    <Flame className={`w-4 h-4 ${hasVotes ? 'fill-orange-500 text-orange-500 animate-pulse' : 'text-gray-300'}`} />
+                    <Flame className={`w-4 h-4 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
                     <span className="text-xs font-bold">{idea.votes_count}</span>
                 </button>
                 {renderAuthor()}

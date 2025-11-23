@@ -9,10 +9,36 @@ export interface Developer {
   created_at: string;
 }
 
+export interface Interested {
+  id: string;
+  user_id: string;
+  created_at: string;
+  profiles?: {
+    full_name: string;
+    avatar_url: string;
+  };
+}
+
 export interface Improvement {
   id: string;
   user_id: string;
   content: string;
+  created_at: string;
+  parent_id?: string | null;
+  thread_level?: number;
+  profiles?: {
+    full_name: string;
+    avatar_url: string;
+  };
+  replies?: Improvement[]; // Frontend helper for threading
+}
+
+export interface Transaction {
+  id: string;
+  user_id: string;
+  transaction_type: 'donation' | 'purchase';
+  amount: number;
+  status: 'pending' | 'confirmed' | 'rejected';
   created_at: string;
   profiles?: {
     full_name: string;
@@ -34,13 +60,19 @@ export interface Idea {
   pdr?: string; // Product Definition Requirements
   votes_count: number;
   is_building: boolean;
-  isFavorite?: boolean; // Frontend state only
+  
+  // Frontend states
+  isFavorite?: boolean; 
+  hasVoted?: boolean;
+  isInterested?: boolean;
+
   created_at: string; // ISO Date string (Matches DB column)
   user_id?: string;
   images?: string[];
   
-  // Monetization Fields
-  monetization_type?: 'NONE' | 'DONATION' | 'PAID';
+  // Monetization Fields (Updated to match new DB schema)
+  payment_type?: 'free' | 'donation' | 'paid'; // Matches DB check constraint
+  monetization_type?: 'NONE' | 'DONATION' | 'PAID'; // Keep for backward compatibility if needed
   price?: number;
   hidden_fields?: string[]; // 'pain' | 'solution' | 'pdr' | 'why' ...
   contact_phone?: string;
@@ -53,8 +85,10 @@ export interface Idea {
   };
 
   // New Relations
-  idea_developers?: Developer[];
+  idea_developers?: Developer[]; // Legacy/Alternative
+  idea_interested?: Interested[];
   idea_improvements?: Improvement[];
+  idea_transactions?: Transaction[];
 }
 
 export interface Review {
@@ -94,13 +128,14 @@ export interface Notification {
   recipient_id: string;
   sender_id: string;
   sender_email?: string;
-  type: 'PDR_REQUEST' | 'SYSTEM' | 'NEW_IMPROVEMENT' | 'NEW_DEV';
+  type: 'PDR_REQUEST' | 'SYSTEM' | 'NEW_IMPROVEMENT' | 'NEW_DEV' | 'NEW_VOTE' | 'NEW_INTEREST' | 'NEW_DONATION' | 'NEW_PURCHASE' | 'COMMENT_REPLY';
   read: boolean;
   payload: {
     idea_id?: string;
     idea_title?: string;
     message?: string;
     user_name?: string;
+    amount?: number;
   };
 }
 

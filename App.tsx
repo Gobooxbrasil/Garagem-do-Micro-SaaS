@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { ViewState, Idea, Project, Notification } from './types';
 import { INITIAL_IDEAS, INITIAL_PROJECTS } from './constants';
@@ -27,6 +27,8 @@ import {
   Database,
   User,
   Bell,
+  Flame,
+  MoreVertical
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -49,6 +51,8 @@ const App: React.FC = () => {
   const [isIdeaModalOpen, setIsIdeaModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   
   // DELETE CONFIRMATION STATE
   const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
@@ -61,6 +65,7 @@ const App: React.FC = () => {
   const [ideasViewMode, setIdeasViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [showMostVotedOnly, setShowMostVotedOnly] = useState(false); // Novo filtro
   const [showMyIdeasOnly, setShowMyIdeasOnly] = useState(false);
 
   // ================= EFFECT 1: AUTH SETUP =================
@@ -94,6 +99,23 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Click outside profile menu to close
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+              setShowProfileMenu(false);
+          }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+      await supabase.auth.signOut();
+      setViewState({ type: 'LANDING' });
+      setShowProfileMenu(false);
+  };
+
   // ================= NOTIFICATIONS & USER LOGIC =================
   const fetchNotifications = async (userId: string) => {
       if (isOfflineMode) return;
@@ -105,7 +127,7 @@ const App: React.FC = () => {
             .order('created_at', { ascending: false });
             
           if (!error && data) {
-              setNotifications(data);
+              setNotifications(data as any);
           }
       } catch (err) {
           console.warn("Tabela de notificações pode não existir ainda.");
@@ -146,71 +168,71 @@ const App: React.FC = () => {
     try {
       // --- FETCH IDEAS ---
       let ideasData: any[] | null = null;
-      let ideasError: any = null;
-
-      try {
-          // 1. Try full fetch with all relations
-          const result = await supabase
-            .from('ideas')
-            .select(`
-                *, 
-                profiles(full_name, avatar_url),
-                idea_developers(id, user_id, created_at, profiles(full_name, avatar_url)),
-                idea_improvements(id, user_id, content, created_at, profiles(full_name, avatar_url))
-            `)
-            .order('created_at', { ascending: false });
-            
-          if (result.error) throw result.error;
-          ideasData = result.data;
-
-      } catch (e: any) {
-          // 2. Fallback: If joined tables don't exist, fetch basic ideas
-          console.warn("Full fetch falhou, tentando modo basico...", e.message);
-          
-          const basicResult = await supabase
-            .from('ideas')
-            .select(`*, profiles(full_name, avatar_url)`)
-            .order('created_at', { ascending: false });
-            
-          ideasData = basicResult.data;
-          
-          if (basicResult.error) {
-             ideasError = basicResult.error;
-          }
-      }
-
-      if (ideasError) throw ideasError;
+      
+      // Fetch com relations novas (Votes, Interested, Transactions)
+      const result = await supabase
+        .from('ideas')
+        .select(`
+            *, 
+            profiles(full_name, avatar_url),
+            idea_interested(id, user_id, created_at, profiles(full_name, avatar_url)),
+            idea_improvements(id, user_id, content, created_at, parent_id, thread_level, profiles(full_name, avatar_url)),
+            idea_transactions(id, user_id, transaction_type, amount, status, created_at, profiles(full_name, avatar_url))
+        `)
+        .order('created_at', { ascending: false });
+        
+      if (result.error) throw result.error;
+      ideasData = result.data;
 
       // Process Data
-      let ideasWithFavs: Idea[] = (ideasData as any[])?.map(i => ({
+      let processedIdeas: Idea[] = (ideasData as any[])?.map(i => ({
           ...i,
-          idea_developers: i.idea_developers || [],
-          idea_improvements: i.idea_improvements?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || []
+          idea_interested: i.idea_interested || [],
+          idea_improvements: i.idea_improvements?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [],
+          idea_transactions: i.idea_transactions || [],
+          // Normalizar payment_type do DB para o app se necessário
+          payment_type: i.payment_type || 'free'
       })) || [];
       
-      if (ideasWithFavs.length === 0) {
-         setIdeas([]); 
-      } else {
-         if (session?.user) {
-            try {
-                const { data: favs } = await supabase
-                    .from('favorites')
-                    .select('idea_id')
-                    .eq('user_id', session.user.id);
-                    
-                if (favs) {
-                    const favIds = new Set(favs.map((f: any) => f.idea_id));
-                    ideasWithFavs = ideasWithFavs.map((i: Idea) => ({
-                        ...i,
-                        isFavorite: favIds.has(i.id)
-                    }));
-                }
-            } catch (err) { console.warn("Erro ao buscar favoritos"); }
-         }
-         setIdeas(ideasWithFavs);
-         
-         // IMPORTANT: Do not update selectedIdea here if it causes a loop!
-         // Only update if the data actually changed meaningfully or if it's a fresh fetch
+      if (processedIdeas.length > 0 && session?.user) {
+         try {
+            // 1. Fetch Favorites
+            const { data: favs } = await supabase
+                .from('favorites')
+                .select('idea_id')
+                .eq('user_id', session.user.id);
+            
+            // 2. Fetch Votes (To check if user already voted)
+            const { data: myVotes } = await supabase
+                .from('idea_votes')
+                .select('idea_id')
+                .eq('user_id', session.user.id);
+            
+            // 3. Fetch Interest (To check if user is interested)
+            const { data: myInterests } = await supabase
+                .from('idea_interested')
+                .select('idea_id')
+                .eq('user_id', session.user.id);
+
+            const favIds = new Set(favs?.map((f: any) => f.idea_id));
+            const voteIds = new Set(myVotes?.map((v: any) => v.idea_id));
+            const interestIds = new Set(myInterests?.map((i: any) => i.idea_id));
+
+            processedIdeas = processedIdeas.map((i: Idea) => ({
+                ...i,
+                isFavorite: favIds.has(i.id),
+                hasVoted: voteIds.has(i.id),
+                isInterested: interestIds.has(i.id)
+            }));
+         } catch (err) { console.warn("Erro ao buscar metadados do usuário"); }
+      }
+      
+      setIdeas(processedIdeas);
+
+      // Se houver uma ideia selecionada, atualize-a com os novos dados para manter o modal sincronizado
+      if (selectedIdea) {
+         const updatedSelected = processedIdeas.find(i => i.id === selectedIdea.id);
+         if (updatedSelected) setSelectedIdea(updatedSelected);
       }
       
       // --- FETCH PROJECTS ---
@@ -235,7 +257,7 @@ const App: React.FC = () => {
     }
 
     setIsLoading(false);
-  }, [session]); // Removed 'selectedIdea' to prevent fetch loop
+  }, [session, selectedIdea?.id]); // Dependência segura
 
   // ================= EFFECT 2: TRIGGER FETCH =================
   useEffect(() => {
@@ -266,16 +288,28 @@ const App: React.FC = () => {
     if (!requireAuth()) return;
     
     const currentIdea = ideas.find(i => i.id === id);
-    if (!currentIdea) return;
+    if (!currentIdea || currentIdea.hasVoted) return;
     
+    // Optimistic Update
     const newCount = currentIdea.votes_count + 1;
     const updatedIdeas = ideas.map(idea => 
-        idea.id === id ? { ...idea, votes_count: newCount } : idea
+        idea.id === id ? { ...idea, votes_count: newCount, hasVoted: true } : idea
     );
     setIdeas(updatedIdeas);
-    if (selectedIdea && selectedIdea.id === id) setSelectedIdea({ ...selectedIdea, votes_count: newCount });
+    if (selectedIdea && selectedIdea.id === id) setSelectedIdea({ ...selectedIdea, votes_count: newCount, hasVoted: true });
 
-    await supabase.from('ideas').update({ votes_count: newCount }).eq('id', id);
+    try {
+        // Insert into idea_votes table
+        const { error } = await supabase.from('idea_votes').insert({
+            idea_id: id,
+            user_id: session.user.id
+        });
+        if (error) throw error;
+    } catch (error) {
+        console.error(error);
+        // Revert on error logic would go here
+        fetchData();
+    }
   };
 
   const handleToggleFavorite = async (id: string) => {
@@ -298,30 +332,31 @@ const App: React.FC = () => {
       }
     } catch (error) {
         console.error(error);
-        setIdeas(ideas); 
+        fetchData();
     }
   };
 
-  const handleJoinIdea = async (id: string) => {
+  const handleInterested = async (id: string) => {
     if (handleOfflineAction()) return;
     if (!requireAuth()) return;
 
     const idea = ideas.find(i => i.id === id);
-    if (!idea) return;
+    if (!idea || idea.isInterested) return;
 
     try {
-        const { data, error } = await supabase.from('idea_developers').insert({
+        const { data, error } = await supabase.from('idea_interested').insert({
             idea_id: id,
             user_id: session.user.id
         }).select('*, profiles(*)').single();
 
         if (error) throw error;
 
+        // Notification handled by trigger or manual below if trigger not set for interested
         if (idea.user_id && idea.user_id !== session.user.id) {
             await supabase.from('notifications').insert({
                 recipient_id: idea.user_id,
                 sender_id: session.user.id,
-                type: 'NEW_DEV',
+                type: 'NEW_INTEREST',
                 payload: {
                     idea_id: id,
                     idea_title: idea.title,
@@ -330,36 +365,18 @@ const App: React.FC = () => {
             });
         }
 
-        const newDev = data;
-        const updatedIdeas = ideas.map(i => {
-            if (i.id === id) {
-                return {
-                    ...i,
-                    is_building: true,
-                    idea_developers: [...(i.idea_developers || []), newDev]
-                }
-            }
-            return i;
-        });
-        setIdeas(updatedIdeas);
-        if (selectedIdea && selectedIdea.id === id) {
-             setSelectedIdea({ 
-                 ...selectedIdea, 
-                 is_building: true,
-                 idea_developers: [...(selectedIdea.idea_developers || []), newDev]
-             });
-        }
+        fetchData(); // Refresh to get new list
 
     } catch (error: any) {
         if (error.code === '23505') {
-            alert("Você já faz parte da equipe!");
+            alert("Você já demonstrou interesse!");
         } else {
             alert(`Erro: ${error.message}`);
         }
     }
   };
 
-  const handleAddImprovement = async (id: string, content: string) => {
+  const handleAddImprovement = async (id: string, content: string, parentId?: string) => {
       if (handleOfflineAction()) return;
       if (!requireAuth()) return;
 
@@ -370,71 +387,54 @@ const App: React.FC = () => {
           const { data, error } = await supabase.from('idea_improvements').insert({
               idea_id: id,
               user_id: session.user.id,
-              content: content
+              content: content,
+              parent_id: parentId || null
           }).select('*, profiles(*)').single();
 
           if (error) throw error;
-
-          const updatedIdeas = ideas.map(i => {
-              if (i.id === id) {
-                  return {
-                      ...i,
-                      idea_improvements: [...(i.idea_improvements || []), data]
-                  }
-              }
-              return i;
-          });
-          setIdeas(updatedIdeas);
-          if (selectedIdea && selectedIdea.id === id) {
-               setSelectedIdea({
-                   ...selectedIdea,
-                   idea_improvements: [...(selectedIdea.idea_improvements || []), data]
-               });
+          
+          // Notificar dono ou parente
+          if (parentId) {
+             // Lógica para notificar quem recebeu resposta (complexo sem saber o user do parent_id, melhor deixar simplificado ou buscar parent)
+          } else if (idea.user_id !== session.user.id) {
+               await supabase.from('notifications').insert({
+                recipient_id: idea.user_id,
+                sender_id: session.user.id,
+                type: 'NEW_IMPROVEMENT',
+                payload: {
+                    idea_id: id,
+                    idea_title: idea.title,
+                    message: content.substring(0, 50) + '...'
+                }
+            });
           }
+
+          fetchData();
 
       } catch (error: any) {
           console.error(error);
-          alert("Erro ao enviar sugestão.");
+          alert("Erro ao enviar comentário.");
       }
-  };
-
-  const handleToggleBuild = async (id: string) => {
-    if (handleOfflineAction()) return;
-    if (!requireAuth()) return;
-    
-    const idea = ideas.find(i => i.id === id);
-    const newState = !idea?.is_building;
-    
-    const updatedIdeas = ideas.map(idea => 
-        idea.id === id ? { ...idea, is_building: newState } : idea
-    );
-    setIdeas(updatedIdeas);
-    if (selectedIdea && selectedIdea.id === id) setSelectedIdea({ ...selectedIdea, is_building: newState! });
-    await supabase.from('ideas').update({ is_building: newState }).eq('id', id);
   };
 
   const handleAddIdea = async (ideaData: any) => {
     if (handleOfflineAction()) return;
     if (!requireAuth()) return;
     
+    // Mapear payment_type correctly
+    const paymentType = ideaData.monetization_type === 'PAID' ? 'paid' : 
+                        ideaData.monetization_type === 'DONATION' ? 'donation' : 'free';
+
     const { data, error } = await supabase.from('ideas').insert({
       ...ideaData,
+      payment_type: paymentType,
       user_id: session.user.id,
       votes_count: 0,
       is_building: false
     }).select('*, profiles(full_name, avatar_url)').single(); 
 
     if (data && !error) {
-      const optimisticData = {
-          ...data,
-          idea_developers: [],
-          idea_improvements: [],
-          profiles: {
-             full_name: session.user.user_metadata?.full_name || 'Eu',
-             avatar_url: userAvatar || ''
-          }
-      }
-      setIdeas(prev => [optimisticData, ...prev]);
+      fetchData();
       setShowMyIdeasOnly(true);
     } else {
         alert(`ERRO AO SALVAR: ${error?.message || JSON.stringify(error)}`);
@@ -471,15 +471,7 @@ const App: React.FC = () => {
     }).select('*, profiles(full_name, avatar_url)').single();
 
     if (data && !error) {
-        const optimisticData = {
-          ...data,
-          reviews: [],
-          profiles: {
-             full_name: session.user.user_metadata?.full_name || 'Eu',
-             avatar_url: userAvatar || ''
-          }
-        }
-        setProjects(prev => [optimisticData, ...prev]);
+        fetchData();
         setViewState({ type: 'SHOWROOM' });
     } else {
         alert(`ERRO AO SALVAR PROJETO: ${error?.message}`);
@@ -522,18 +514,23 @@ const App: React.FC = () => {
     if (showFavoritesOnly) {
         result = result.filter(idea => idea.isFavorite);
     }
+    if (showMostVotedOnly) {
+        result.sort((a, b) => b.votes_count - a.votes_count);
+    } else if (sortBy === 'votes') {
+        result.sort((a, b) => b.votes_count - a.votes_count);
+    } else {
+        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
     if (showMyIdeasOnly && session?.user) {
         result = result.filter(idea => idea.user_id === session.user.id);
     }
     if (selectedNiche !== 'Todos') {
       result = result.filter(idea => idea.niche === selectedNiche);
     }
-    result.sort((a, b) => {
-      if (sortBy === 'votes') return b.votes_count - a.votes_count;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
+    
     return result;
-  }, [ideas, selectedNiche, sortBy, searchQuery, showFavoritesOnly, showMyIdeasOnly, session]);
+  }, [ideas, selectedNiche, sortBy, searchQuery, showFavoritesOnly, showMyIdeasOnly, showMostVotedOnly, session]);
 
   const promptDeleteIdea = (id: string) => {
       if (handleOfflineAction()) return;
@@ -549,16 +546,14 @@ const App: React.FC = () => {
           return;
       }
       setIdeaToDelete(null); 
-      const previousIdeas = [...ideas];
-      setIdeas(prev => prev.filter(i => i.id !== id));
-      if (selectedIdea?.id === id) setSelectedIdea(null);
-
+      
       try {
           const { error } = await supabase.from('ideas').delete().eq('id', id);
           if (error) throw error;
+          setIdeas(prev => prev.filter(i => i.id !== id));
+          if (selectedIdea?.id === id) setSelectedIdea(null);
       } catch (error: any) {
           console.error('Erro ao deletar:', error);
-          setIdeas(previousIdeas);
           alert(`❌ FALHA AO EXCLUIR:\n\n${error.message}`);
       }
   };
@@ -614,7 +609,7 @@ const App: React.FC = () => {
                  </button>
                  
                  {showNotifications && (
-                     <div className="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                     <div className="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50">
                          <div className="p-3 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
                              <span className="text-xs font-bold text-gray-500 uppercase">Notificações</span>
                              {unreadCount > 0 && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">{unreadCount} novas</span>}
@@ -633,16 +628,13 @@ const App: React.FC = () => {
                                              <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notif.read ? 'bg-blue-500' : 'bg-transparent'}`}></div>
                                              <div>
                                                  <p className="text-xs text-gray-400 mb-1">{new Date(notif.created_at).toLocaleDateString()}</p>
-                                                 {notif.type === 'PDR_REQUEST' && (
-                                                     <p className="text-sm text-gray-700">
-                                                         <span className="font-bold">Solicitação de PDR</span> para a ideia <strong>{notif.payload.idea_title}</strong>.
-                                                     </p>
-                                                 )}
-                                                 {notif.type === 'NEW_DEV' && (
-                                                     <p className="text-sm text-gray-700">
-                                                         <strong>{notif.payload.user_name || 'Alguém'}</strong> quer desenvolver sua ideia <strong>{notif.payload.idea_title}</strong>!
-                                                     </p>
-                                                 )}
+                                                 <p className="text-sm text-gray-700">
+                                                     {notif.type === 'NEW_VOTE' && `Novo voto na sua ideia ${notif.payload.idea_title}.`}
+                                                     {notif.type === 'NEW_INTEREST' && `${notif.payload.user_name} tem interesse no seu projeto!`}
+                                                     {notif.type === 'NEW_DONATION' && `💰 Você recebeu uma doação de R$ ${notif.payload.amount}!`}
+                                                     {notif.type === 'COMMENT_REPLY' && `Alguém respondeu seu comentário.`}
+                                                     {notif.type === 'PDR_REQUEST' && `Solicitação de PDR para ${notif.payload.idea_title}.`}
+                                                 </p>
                                              </div>
                                          </div>
                                      </div>
@@ -653,14 +645,14 @@ const App: React.FC = () => {
                  )}
              </div>
 
-             {/* Auth/Profile */}
+             {/* Auth/Profile Dropdown */}
              {session ? (
-                 <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
+                 <div className="relative" ref={profileMenuRef}>
                      <button 
-                        onClick={() => setViewState({ type: 'PROFILE' })}
-                        className="flex items-center gap-2 text-right group"
+                        onClick={() => setShowProfileMenu(!showProfileMenu)}
+                        className="flex items-center gap-3 pl-3 border-l border-gray-200 group"
                      >
-                         <div className="hidden sm:block">
+                         <div className="hidden sm:block text-right">
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Logado como</p>
                             <p className="text-sm font-bold text-apple-text group-hover:text-apple-blue transition-colors">
                                 {session.user.user_metadata?.full_name?.split(' ')[0] || 'Usuário'}
@@ -675,7 +667,26 @@ const App: React.FC = () => {
                                  </div>
                              )}
                          </div>
+                         <ChevronDown className="w-4 h-4 text-gray-400" />
                      </button>
+
+                     {showProfileMenu && (
+                         <div className="absolute right-0 top-12 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50">
+                             <button 
+                                onClick={() => { setViewState({ type: 'PROFILE' }); setShowProfileMenu(false); }}
+                                className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 flex items-center gap-2"
+                             >
+                                <User className="w-4 h-4" /> Ver Perfil
+                             </button>
+                             <div className="h-px bg-gray-100"></div>
+                             <button 
+                                onClick={handleLogout}
+                                className="w-full text-left px-4 py-3 text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+                             >
+                                <LogOut className="w-4 h-4" /> Sair
+                             </button>
+                         </div>
+                     )}
                  </div>
              ) : (
                  <button 
@@ -694,7 +705,7 @@ const App: React.FC = () => {
         
         {/* --- VIEW: PROFILE --- */}
         {viewState.type === 'PROFILE' && session && (
-            <ProfileView session={session} />
+            <ProfileView session={session} onLogout={handleLogout} />
         )}
 
         {/* --- VIEW: PROJECT DETAIL --- */}
@@ -748,8 +759,18 @@ const App: React.FC = () => {
                         <div>
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Filtros</h3>
                             <div className="space-y-2">
+                                {/* Mais Votados */}
                                 <button 
-                                    onClick={() => { if(requireAuth()) setShowFavoritesOnly(!showFavoritesOnly); }}
+                                    onClick={() => { setShowMostVotedOnly(!showMostVotedOnly); setShowFavoritesOnly(false); }}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${showMostVotedOnly ? 'bg-orange-50 text-orange-600 shadow-sm border border-orange-100' : 'text-gray-600 hover:bg-gray-100'}`}
+                                >
+                                    <Flame className={`w-4 h-4 ${showMostVotedOnly ? 'fill-orange-600' : ''}`} /> 
+                                    Mais Votados
+                                </button>
+
+                                {/* Meus Favoritos */}
+                                <button 
+                                    onClick={() => { if(requireAuth()) { setShowFavoritesOnly(!showFavoritesOnly); setShowMostVotedOnly(false); } }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${showFavoritesOnly ? 'bg-red-50 text-red-600 shadow-sm border border-red-100' : 'text-gray-600 hover:bg-gray-100'}`}
                                 >
                                     <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 
@@ -830,7 +851,6 @@ const App: React.FC = () => {
                                         key={idea.id} 
                                         idea={idea} 
                                         onUpvote={handleUpvote}
-                                        onToggleBuild={handleToggleBuild}
                                         onToggleFavorite={handleToggleFavorite}
                                         onDelete={promptDeleteIdea}
                                         viewMode={ideasViewMode}
@@ -913,11 +933,11 @@ const App: React.FC = () => {
         currentUserId={session?.user?.id}
         onClose={() => setSelectedIdea(null)}
         onUpvote={handleUpvote}
-        onToggleBuild={handleToggleBuild}
         onToggleFavorite={handleToggleFavorite}
         onRequestPdr={handleRequestPdr}
-        onJoinTeam={handleJoinIdea}
+        onJoinTeam={handleInterested}
         onAddImprovement={handleAddImprovement}
+        refreshData={fetchData}
       />
 
       <AuthModal 
