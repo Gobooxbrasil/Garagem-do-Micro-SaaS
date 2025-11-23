@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Idea } from '../types';
-import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search } from 'lucide-react';
+import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search, FileCode } from 'lucide-react';
 import { PRESET_NICHES } from '../constants';
 
 interface NewIdeaModalProps {
@@ -26,6 +26,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
     pricing_model: '',
     target: '',
     sales_strategy: '',
+    pdr: '',
     images: [] as string[]
   });
 
@@ -47,6 +48,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
       pricing_model: '',
       target: '',
       sales_strategy: '',
+      pdr: '',
       images: []
     });
     setError(null);
@@ -238,6 +240,26 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
             <div>
               <label className={labelClass}>A Solução</label>
               <textarea required name="solution" value={formData.solution} onChange={handleChange} className={`${inputClass} h-24 resize-none`} placeholder="Como o software resolve isso de forma elegante?" />
+            </div>
+
+            {/* PDR SECTION */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 border-dashed">
+               <div className="flex items-center gap-2 mb-2">
+                  <FileCode className="w-4 h-4 text-indigo-600" />
+                  <label className="text-xs font-bold text-indigo-800 uppercase tracking-wide">PDR (Product Definition Requirements)</label>
+               </div>
+               <p className="text-xs text-gray-500 mb-3">
+                  O briefing técnico para a IA. Defina stack, fluxo de dados e funcionalidades principais. 
+                  <br/>
+                  <span className="italic text-indigo-600">** Este campo é privado por padrão. Outros usuários precisarão solicitar acesso.</span>
+               </p>
+               <textarea 
+                  name="pdr" 
+                  value={formData.pdr} 
+                  onChange={handleChange} 
+                  className={`${inputClass} h-32 resize-none font-mono text-xs leading-relaxed bg-white`} 
+                  placeholder={"Ex: \n- Stack: React, Supabase, Tailwind\n- Auth: Google OAuth\n- Feature 1: Dashboard em tempo real..."} 
+               />
             </div>
 
             <div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabaseClient';
-import { ViewState, Idea, Project, Review } from './types';
+import { ViewState, Idea, Project, Review, Notification } from './types';
 import { INITIAL_IDEAS, INITIAL_PROJECTS } from './constants';
 import IdeaCard from './components/IdeaCard';
 import ProjectCard from './components/ProjectCard';
@@ -11,6 +11,7 @@ import NewIdeaModal from './components/NewIdeaModal';
 import IdeaDetailModal from './components/IdeaDetailModal';
 import AuthModal from './components/AuthModal';
 import LandingPage from './components/LandingPage';
+import ProfileView from './components/ProfileView'; // Import ProfileView
 import { 
   Layers, 
   Plus, 
@@ -31,7 +32,10 @@ import {
   Database,
   RefreshCw,
   Settings,
-  User
+  User,
+  Bell,
+  MessageSquare,
+  UserCog
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -42,6 +46,7 @@ const App: React.FC = () => {
   // DATA STATES
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -51,6 +56,7 @@ const App: React.FC = () => {
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [isIdeaModalOpen, setIsIdeaModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null);
 
@@ -68,6 +74,7 @@ const App: React.FC = () => {
       setSession(session);
       if (session) {
          setViewState({ type: 'IDEAS' });
+         fetchNotifications(session.user.id);
       }
     }).finally(() => {
       setIsAuthChecking(false);
@@ -78,14 +85,42 @@ const App: React.FC = () => {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
+          // If logged in from landing, go to ideas
           setViewState(prev => prev.type === 'LANDING' ? { type: 'IDEAS' } : prev);
+          fetchNotifications(session.user.id);
       } else {
           setViewState({ type: 'LANDING' });
+          setNotifications([]);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // ================= NOTIFICATIONS LOGIC =================
+  const fetchNotifications = async (userId: string) => {
+      try {
+          const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('recipient_id', userId)
+            .order('created_at', { ascending: false });
+            
+          if (!error && data) {
+              setNotifications(data);
+          }
+      } catch (err) {
+          console.error("Erro ao buscar notificações:", err);
+      }
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+      // Otimistic Update
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      await supabase.from('notifications').update({ read: true }).eq('id', id);
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   // ================= DATA FETCHING LOGIC =================
   const fetchData = useCallback(async () => {
@@ -177,7 +212,8 @@ const App: React.FC = () => {
 
   // ================= EFFECT 2: TRIGGER FETCH =================
   useEffect(() => {
-    if (viewState.type !== 'LANDING' && !isAuthChecking) {
+    // Busca dados quando entra em IDEAS ou SHOWROOM, mas não em PROFILE
+    if ((viewState.type === 'IDEAS' || viewState.type === 'SHOWROOM') && !isAuthChecking) {
         fetchData();
     }
   }, [viewState.type, isAuthChecking, fetchData]);
@@ -384,6 +420,24 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRequestPdr = async (ideaId: string, ownerId: string, ideaTitle: string, message: string) => {
+      if (!requireAuth()) return;
+
+      const { error } = await supabase.from('notifications').insert({
+          recipient_id: ownerId,
+          sender_id: session.user.id,
+          sender_email: session.user.email,
+          type: 'PDR_REQUEST',
+          payload: {
+              idea_id: ideaId,
+              idea_title: ideaTitle,
+              message: message
+          }
+      });
+
+      if (error) throw error;
+  };
+
   const handleAddProject = async (newProjectData: any) => {
     if (!requireAuth()) return;
     
@@ -435,12 +489,16 @@ const App: React.FC = () => {
   }
 
   const renderContent = () => {
-    if (isLoading && viewState.type !== 'LANDING') {
+    if (isLoading && viewState.type !== 'LANDING' && viewState.type !== 'PROFILE') {
         return (
             <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
             </div>
         )
+    }
+
+    if (viewState.type === 'PROFILE') {
+        return <ProfileView session={session} />;
     }
 
     if (viewState.type === 'IDEAS') {
@@ -774,28 +832,107 @@ const App: React.FC = () => {
               </button>
             </div>
 
-            {/* Auth & Mobile */}
+            {/* Auth & Notifications & Mobile */}
             <div className="flex items-center gap-4">
-              <a href="#" className="text-gray-400 hover:text-black transition-colors hidden md:block">
-                <Github className="w-5 h-5" />
-              </a>
               
               {session ? (
-                <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
-                    <div className="hidden md:flex flex-col items-end">
-                        <span className="text-[10px] text-gray-400 uppercase font-bold">Logado como</span>
-                        <span className="text-xs font-semibold truncate max-w-[100px]">
-                          {session.user.user_metadata?.full_name || session.user.email}
-                        </span>
+                <>
+                    {/* Notification Bell */}
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowNotifications(!showNotifications)}
+                            className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors relative"
+                        >
+                            <Bell className="w-5 h-5" />
+                            {unreadCount > 0 && (
+                                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white"></span>
+                            )}
+                        </button>
+                        
+                        {/* Notification Dropdown */}
+                        {showNotifications && (
+                            <>
+                                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                                    <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                        <span className="text-xs font-bold text-gray-500 uppercase">Notificações</span>
+                                        <span className="text-xs text-gray-400">{unreadCount} novas</span>
+                                    </div>
+                                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                                        {notifications.length === 0 ? (
+                                            <div className="p-8 text-center text-gray-400 text-sm">
+                                                Nenhuma notificação.
+                                            </div>
+                                        ) : (
+                                            notifications.map(n => (
+                                                <div 
+                                                    key={n.id} 
+                                                    onClick={() => markNotificationAsRead(n.id)}
+                                                    className={`p-4 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${!n.read ? 'bg-blue-50/30' : ''}`}
+                                                >
+                                                    <div className="flex gap-3">
+                                                        <div className="mt-1 bg-indigo-100 p-1.5 rounded-full h-fit shrink-0">
+                                                            <MessageSquare className="w-3 h-3 text-indigo-600" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-800 mb-1">Solicitação de PDR</p>
+                                                            <p className="text-xs text-gray-600 leading-relaxed">
+                                                                Alguém pediu acesso à ideia <span className="font-bold">"{n.payload.idea_title}"</span>.
+                                                            </p>
+                                                            <div className="mt-2 bg-white border border-gray-200 p-2 rounded-lg text-xs text-gray-500 italic">
+                                                                "{n.payload.message}"
+                                                            </div>
+                                                            <p className="text-[10px] text-gray-400 mt-2">
+                                                                Contato: {n.sender_email}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                                {/* Backdrop to close */}
+                                <div className="fixed inset-0 z-40 cursor-default" onClick={() => setShowNotifications(false)}></div>
+                            </>
+                        )}
                     </div>
-                    <button 
-                        onClick={() => supabase.auth.signOut()}
-                        title="Sair"
-                        className="w-9 h-9 rounded-full bg-gray-100 hover:bg-red-50 hover:text-red-500 border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shadow-sm transition-all"
-                    >
-                        <LogOut className="w-4 h-4" />
-                    </button>
-                </div>
+
+                    <div className="flex items-center gap-3 pl-3 border-l border-gray-200 relative group">
+                        <button className="hidden md:flex flex-col items-end group-hover:opacity-80 transition-opacity">
+                            <span className="text-[10px] text-gray-400 uppercase font-bold">Logado como</span>
+                            <span className="text-xs font-semibold truncate max-w-[100px]">
+                            {session.user.user_metadata?.full_name || session.user.email}
+                            </span>
+                        </button>
+                        
+                        {/* Profile Dropdown Trigger */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setViewState(prev => prev.type === 'PROFILE' ? { type: 'IDEAS' } : { type: 'PROFILE' })}
+                                title="Meu Perfil"
+                                className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold shadow-sm transition-all overflow-hidden ${viewState.type === 'PROFILE' ? 'border-apple-blue ring-2 ring-apple-blue/20' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'}`}
+                            >
+                                <UserCircle className="w-5 h-5" />
+                            </button>
+
+                            {/* Hover Dropdown (Simple logout logic integrated in button for now, but extending for Profile nav) */}
+                             <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden hidden group-hover:block z-50">
+                                <button 
+                                    onClick={() => setViewState({ type: 'PROFILE' })}
+                                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    <UserCog className="w-4 h-4" /> Meu Perfil
+                                </button>
+                                <button 
+                                    onClick={() => supabase.auth.signOut()}
+                                    className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-50"
+                                >
+                                    <LogOut className="w-4 h-4" /> Sair
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
               ) : (
                 <button 
                     onClick={() => setIsAuthModalOpen(true)}
@@ -838,10 +975,12 @@ const App: React.FC = () => {
 
       <IdeaDetailModal
         idea={selectedIdea}
+        currentUserId={session?.user?.id}
         onClose={() => setSelectedIdea(null)}
         onUpvote={handleUpvote}
         onToggleBuild={handleToggleBuild}
         onToggleFavorite={handleToggleFavorite}
+        onRequestPdr={handleRequestPdr}
       />
 
       <AuthModal 

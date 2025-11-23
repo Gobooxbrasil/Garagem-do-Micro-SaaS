@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Idea } from '../types';
 import { 
   X, 
@@ -17,7 +17,6 @@ import {
   PawPrint, 
   GraduationCap, 
   Scale, 
-  Sprout, 
   Code2, 
   Palette, 
   ShoppingCart, 
@@ -26,19 +25,24 @@ import {
   Tractor,
   Plane,
   Utensils,
-  Truck
+  Truck,
+  FileCode,
+  Lock,
+  Send,
+  Loader2
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
   idea: Idea | null;
+  currentUserId?: string;
   onClose: () => void;
   onUpvote: (id: string) => void;
   onToggleBuild: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  onRequestPdr: (ideaId: string, ownerId: string, ideaTitle: string, message: string) => Promise<void>;
 }
 
 // Duplicating the helper to ensure it works without complex exports in this context
-// In a real repo, this would be in utils.ts
 const getNicheVisuals = (niche: string) => {
     const n = niche.toLowerCase();
     
@@ -66,16 +70,46 @@ const getNicheVisuals = (niche: string) => {
 
 const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({ 
   idea, 
+  currentUserId,
   onClose, 
   onUpvote, 
   onToggleBuild, 
-  onToggleFavorite 
+  onToggleFavorite,
+  onRequestPdr
 }) => {
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestMessage, setRequestMessage] = useState('');
+  const [requestSent, setRequestSent] = useState(false);
+  const [sending, setSending] = useState(false);
+
   if (!idea) return null;
 
   const hasImage = idea.images && idea.images.length > 0 && idea.images[0] !== '';
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
+
+  const isOwner = currentUserId && idea.user_id === currentUserId;
+  
+  // If no PDR exists, show nothing, unless owner (then maybe prompt to add?)
+  // For now, if owner has empty PDR, we show "Not defined".
+  const hasPdrContent = idea.pdr && idea.pdr.trim().length > 0;
+
+  const handleSendRequest = async () => {
+    if (!requestMessage.trim()) return;
+    if (!idea.user_id) return;
+
+    setSending(true);
+    try {
+        await onRequestPdr(idea.id, idea.user_id, idea.title, requestMessage);
+        setRequestSent(true);
+        setIsRequesting(false);
+    } catch (error) {
+        console.error(error);
+        alert("Erro ao enviar solicitação.");
+    } finally {
+        setSending(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -137,6 +171,89 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                     <p className="text-gray-800 leading-relaxed font-medium">
                         {idea.solution}
                     </p>
+                </div>
+            </div>
+            
+            {/* PDR SECTION (TECH SPECS) */}
+            <div className="space-y-3 border border-indigo-100 rounded-2xl overflow-hidden">
+                <div className="bg-indigo-50/50 px-5 py-3 border-b border-indigo-100 flex items-center justify-between">
+                     <div className="flex items-center gap-2 text-indigo-700 text-xs font-bold uppercase tracking-wide">
+                        <FileCode className="w-4 h-4" /> Tech Specs (PDR)
+                     </div>
+                     {!isOwner && (
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase">
+                            <Lock className="w-3 h-3" /> Protected
+                        </div>
+                     )}
+                </div>
+                
+                <div className="p-5 bg-slate-50 relative">
+                    {isOwner ? (
+                         <div className="font-mono text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                             {hasPdrContent ? idea.pdr : <span className="text-gray-400 italic">Nenhum PDR definido ainda. Edite a ideia para adicionar especificações técnicas.</span>}
+                         </div>
+                    ) : (
+                        <div className="relative">
+                             {/* Blurred Content Simulation */}
+                             <div className="font-mono text-sm text-gray-400 whitespace-pre-wrap leading-relaxed blur-sm select-none">
+                                 STACK SUGERIDA:
+                                 - Frontend: React + TypeScript
+                                 - Backend: Node.js
+                                 ... [conteúdo protegido] ...
+                                 FLUXO DE DADOS:
+                                 1. Usuário faz login
+                                 ... [conteúdo protegido] ...
+                             </div>
+                             
+                             {/* Request Overlay */}
+                             <div className="absolute inset-0 flex items-center justify-center z-10">
+                                 {!isRequesting && !requestSent && (
+                                     <button 
+                                        onClick={() => setIsRequesting(true)}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-full shadow-lg shadow-indigo-500/30 transition-all flex items-center gap-2 text-sm"
+                                     >
+                                         <Lock className="w-3 h-3" /> Solicitar Acesso Completo
+                                     </button>
+                                 )}
+                                 
+                                 {requestSent && (
+                                     <div className="bg-green-100 text-green-800 px-6 py-2 rounded-full font-bold text-sm flex items-center gap-2 shadow-sm border border-green-200">
+                                         <CheckCircle2 className="w-4 h-4" /> Solicitação Enviada ao Dono
+                                     </div>
+                                 )}
+                             </div>
+                        </div>
+                    )}
+
+                    {/* Request Form Area */}
+                    {isRequesting && !isOwner && !requestSent && (
+                        <div className="mt-4 p-4 bg-white rounded-xl border border-gray-200 shadow-sm animate-in slide-in-from-top-2">
+                             <h4 className="text-sm font-bold text-gray-800 mb-2">Mensagem para o dono do projeto:</h4>
+                             <textarea 
+                                value={requestMessage}
+                                onChange={(e) => setRequestMessage(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg p-3 text-sm mb-3 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                placeholder="Olá! Sou desenvolvedor e gostaria de ver o PDR para ajudar a construir..."
+                                rows={3}
+                             />
+                             <div className="flex justify-end gap-2">
+                                 <button 
+                                    onClick={() => setIsRequesting(false)}
+                                    className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                 >
+                                     Cancelar
+                                 </button>
+                                 <button 
+                                    onClick={handleSendRequest}
+                                    disabled={!requestMessage.trim() || sending}
+                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
+                                 >
+                                     {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                                     Enviar Solicitação
+                                 </button>
+                             </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
