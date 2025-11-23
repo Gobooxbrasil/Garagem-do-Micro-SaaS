@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { Idea, UserProfile, Improvement } from '../types';
+import { Idea, Improvement } from '../types';
 import ShareButton from './ShareButton';
 import RequestPixModal from './modals/RequestPixModal';
-import { TransactionLoader } from './ui/LoadingStates';
+import { PurchaseModal } from './modals/PurchaseModal'; // Novo Import
+import { supabase } from '../lib/supabaseClient';
 import { 
   X, 
   AlertCircle, 
@@ -34,16 +34,13 @@ import {
   Send,
   Loader2,
   Gift,
-  QrCode,
   CheckCircle,
   Unlock,
   User,
-  Info,
   MessageSquarePlus,
   Hash,
   Star,
   Reply,
-  Upload,
   EyeOff
 } from 'lucide-react';
 
@@ -59,11 +56,6 @@ interface IdeaDetailModalProps {
   onAddImprovement?: (ideaId: string, content: string, parentId?: string) => Promise<void>;
   refreshData: () => void;
 }
-
-// Generate Pix Mock
-const generatePixPayload = (key: string, name: string, txId: string = '***', amount?: number) => {
-  return `00020126330014br.gov.bcb.pix0111${key}520400005303986540${amount ? amount.toFixed(2).length : 4}${amount ? amount.toFixed(2) : '0.00'}5802BR59${name.length.toString().padStart(2,'0')}${name}6009SAO PAULO62070503${txId}6304`;
-};
 
 const getNicheVisuals = (niche: string) => {
     const n = niche.toLowerCase();
@@ -175,13 +167,10 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const [submittingImprovement, setSubmittingImprovement] = useState(false);
 
   // Payment States
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentType, setPaymentType] = useState<'DONATION' | 'PURCHASE'>('DONATION');
-  const [donationAmount, setDonationAmount] = useState<string>('');
-  const [creatorProfile, setCreatorProfile] = useState<UserProfile | null>(null);
-  const [pixPayload, setPixPayload] = useState<string | null>(null);
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [purchaseType, setPurchaseType] = useState<'donation' | 'purchase'>('donation');
+  const [donationAmount, setDonationAmount] = useState<number>(0);
+  const [creatorPixData, setCreatorPixData] = useState<any>(null); // Dados do PIX do criador
   const [showRequestPixModal, setShowRequestPixModal] = useState(false);
 
   const isUnlocked = idea?.user_id === currentUserId || 
@@ -197,8 +186,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const isOwner = currentUserId && idea.user_id === currentUserId;
   const isPaidContent = idea.payment_type === 'paid';
   const isHidden = (field: string) => isPaidContent && idea.hidden_fields?.includes(field) && !isUnlocked && !isOwner;
-
-  // USE FLATTENED STATS
   const creatorName = idea.creator_name || idea.profiles?.full_name || 'Anônimo';
   const creatorAvatar = idea.creator_avatar || idea.profiles?.avatar_url;
 
@@ -238,132 +225,48 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
       catch (error) { console.error(error); }
   };
 
-  const handleOpenPayment = async (type: 'DONATION' | 'PURCHASE') => {
-      if (idea.user_id) {
-          // Check Pix Key logic
-          const { data } = await supabase.from('profiles').select('*').eq('id', idea.user_id).single();
-          if (data) {
-              if (!data.pix_key) {
-                  // Creator has no PIX configured
-                  setCreatorProfile(data);
-                  setShowRequestPixModal(true);
-                  return;
-              }
-              setCreatorProfile(data);
+  const handleInitiatePayment = async (type: 'donation' | 'purchase') => {
+      if (!idea.user_id) return;
+      
+      // Se for doação, pede o valor antes (prompt simples por enquanto, melhor seria um modal intermediário)
+      let amount = 0;
+      if (type === 'donation') {
+          const val = prompt("Qual valor você deseja doar? (Ex: 10.00)");
+          if (!val) return;
+          amount = parseFloat(val);
+          if (isNaN(amount) || amount <= 0) {
+              alert("Valor inválido");
+              return;
           }
+          setDonationAmount(amount);
+      } else {
+          amount = idea.price || 0;
       }
-      setPaymentType(type);
-      setShowPaymentModal(true);
-      setPixPayload(null);
-      setDonationAmount('');
-      setProofFile(null);
-  };
 
-  const generatePaymentPix = () => {
+      // Buscar PIX do criador
+      const { data: creatorProfile } = await supabase.from('profiles').select('*').eq('id', idea.user_id).single();
+      
       if (!creatorProfile || !creatorProfile.pix_key) {
-          alert("Erro: Chave Pix não encontrada.");
+          setShowRequestPixModal(true);
           return;
       }
-      let amountVal = 0;
-      if (paymentType === 'PURCHASE' && idea.price) {
-          amountVal = idea.price;
-      } else if (paymentType === 'DONATION' && donationAmount) {
-          amountVal = parseFloat(donationAmount);
-      }
-      const payload = generatePixPayload(creatorProfile.pix_key, creatorProfile.pix_name || 'Usuario', 'GMS', amountVal);
-      setPixPayload(payload);
-  };
 
-  const submitTransaction = async () => {
-      if(!currentUserId) return;
-      if(paymentType === 'PURCHASE' && !proofFile) {
-          alert("Por favor, anexe o comprovante.");
-          return;
-      }
-      setIsSubmittingTransaction(true);
-      try {
-          let proofUrl = '';
-          if (proofFile) {
-              const fileExt = proofFile.name.split('.').pop();
-              const fileName = `${Math.random()}.${fileExt}`;
-              const { error: uploadError } = await supabase.storage.from('proofs').upload(fileName, proofFile);
-              if (uploadError) throw uploadError;
-              const { data: { publicUrl } } = supabase.storage.from('proofs').getPublicUrl(fileName);
-              proofUrl = publicUrl;
-          }
-          const amount = paymentType === 'PURCHASE' ? idea.price : parseFloat(donationAmount);
-          const { error } = await supabase.from('idea_transactions').insert({
-              idea_id: idea.id,
-              user_id: currentUserId,
-              transaction_type: paymentType.toLowerCase(),
-              amount: amount,
-              payment_proof: proofUrl,
-              status: 'confirmed'
-          });
-          if (error) throw error;
-          if (idea.user_id) {
-            await supabase.from('notifications').insert({
-                recipient_id: idea.user_id,
-                sender_id: currentUserId,
-                type: paymentType === 'DONATION' ? 'NEW_DONATION' : 'NEW_PURCHASE',
-                payload: { idea_id: idea.id, idea_title: idea.title, amount: amount }
-            });
-          }
-          alert("Pagamento registrado com sucesso!");
-          setShowPaymentModal(false);
-          refreshData();
-      } catch (error: any) {
-          alert("Erro ao processar: " + error.message);
-      } finally {
-          setIsSubmittingTransaction(false);
-      }
+      setCreatorPixData({
+          key: creatorProfile.pix_key,
+          type: creatorProfile.pix_key_type,
+          beneficiary: creatorProfile.pix_name || creatorProfile.full_name,
+          bank: creatorProfile.pix_bank
+      });
+      setPurchaseType(type);
+      setDonationAmount(amount);
+      setShowPurchaseModal(true);
   };
 
   const renderLockedContent = (label: string) => (
       <div className="bg-gray-50 border border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center space-y-3 relative overflow-hidden h-full min-h-[160px]">
           <div className="bg-white p-3 rounded-full shadow-sm border border-gray-100"><Lock className="w-5 h-5 text-gray-400" /></div>
           <div><h4 className="font-bold text-gray-700 text-sm">Conteúdo Bloqueado</h4><p className="text-xs text-gray-500 mt-1 max-w-[200px] mx-auto">Adquira o projeto para ver {label}.</p></div>
-          <button onClick={() => handleOpenPayment('PURCHASE')} className="mt-2 bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-bold text-xs transition-all shadow-lg shadow-black/10 flex items-center gap-2"><Unlock className="w-3 h-3" /> Desbloquear</button>
-      </div>
-  );
-
-  const renderPaymentModal = () => (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in zoom-in-95 duration-200">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 relative shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
-              <button onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X className="w-4 h-4 text-gray-500" /></button>
-               {isSubmittingTransaction ? <TransactionLoader /> : (
-                 <div className="text-center mb-6">
-                    <h3 className="text-lg font-bold text-apple-text">{paymentType === 'DONATION' ? 'Apoiar o Projeto' : 'Comprar Acesso'}</h3>
-                    <div className="mt-4 space-y-4">
-                        {paymentType === 'DONATION' && !pixPayload && (
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Valor da Doação (R$)</label>
-                                <input type="number" value={donationAmount} onChange={(e) => setDonationAmount(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold text-lg" placeholder="0.00" />
-                            </div>
-                        )}
-                        {!pixPayload && (
-                             <button onClick={generatePaymentPix} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors">Gerar QR Code Pix</button>
-                        )}
-                        {pixPayload && (
-                             <div className="animate-in fade-in">
-                                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
-                                     <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixPayload)}`} alt="Pix QR Code" className="w-40 h-40 mx-auto mix-blend-multiply mb-2"/>
-                                     <p className="text-xs text-gray-500 break-all font-mono bg-white p-2 rounded border border-gray-100">{pixPayload}</p>
-                                 </div>
-                                 <div className="text-left mb-4">
-                                     <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Comprovante de Pagamento</label>
-                                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 transition-colors cursor-pointer relative">
-                                         <input type="file" accept="image/*" onChange={(e) => setProofFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                         <div className="flex flex-col items-center gap-2"><Upload className="w-6 h-6 text-gray-400" /><span className="text-sm text-gray-600">{proofFile ? proofFile.name : "Clique para enviar o comprovante"}</span></div>
-                                     </div>
-                                 </div>
-                                 <button onClick={submitTransaction} disabled={isSubmittingTransaction || !proofFile} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">Confirmar Pagamento</button>
-                             </div>
-                        )}
-                    </div>
-                 </div>
-               )}
-          </div>
+          <button onClick={() => handleInitiatePayment('purchase')} className="mt-2 bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-bold text-xs transition-all shadow-lg shadow-black/10 flex items-center gap-2"><Unlock className="w-3 h-3" /> Desbloquear</button>
       </div>
   );
 
@@ -428,8 +331,8 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                      <div className="space-y-8">
                          <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 space-y-4 shadow-sm">
                              <button onClick={() => onToggleFavorite(idea.id)} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 border transition-all ${idea.isFavorite ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-600' : ''}`} /> {idea.isFavorite ? 'Favoritado' : 'Favoritar Projeto'}</button>
-                             {!isOwner && idea.payment_type === 'donation' && ( <button onClick={() => handleOpenPayment('DONATION')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"><Gift className="w-4 h-4" /> Quero Doar</button> )}
-                             {!isOwner && idea.payment_type === 'paid' && !isUnlocked && ( <button onClick={() => handleOpenPayment('PURCHASE')} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-500/20 transition-all flex items-center justify-center gap-2"><Lock className="w-4 h-4" /> Comprar Acesso (R$ {idea.price})</button> )}
+                             {!isOwner && idea.payment_type === 'donation' && ( <button onClick={() => handleInitiatePayment('donation')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"><Gift className="w-4 h-4" /> Quero Doar</button> )}
+                             {!isOwner && idea.payment_type === 'paid' && !isUnlocked && ( <button onClick={() => handleInitiatePayment('purchase')} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-500/20 transition-all flex items-center justify-center gap-2"><Lock className="w-4 h-4" /> Comprar Acesso (R$ {idea.price})</button> )}
                              
                              <div className="pt-4 mt-4 border-t border-gray-200">
                                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-1">Interessados ({idea.idea_interested?.length || 0})</h4>
@@ -454,7 +357,20 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                  </div>
             </div>
         </div>
-        {showPaymentModal && renderPaymentModal()}
+        
+        {/* MODAL DE COMPRA / DOAÇÃO */}
+        {showPurchaseModal && creatorPixData && currentUserId && (
+             <PurchaseModal 
+                isOpen={showPurchaseModal}
+                onClose={() => { setShowPurchaseModal(false); refreshData(); }}
+                ideaId={idea.id}
+                userId={currentUserId}
+                amount={donationAmount}
+                type={purchaseType}
+                creatorPix={creatorPixData}
+             />
+        )}
+
         <RequestPixModal 
             isOpen={showRequestPixModal} 
             onClose={() => setShowRequestPixModal(false)}

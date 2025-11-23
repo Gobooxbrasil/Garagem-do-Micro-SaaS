@@ -2,57 +2,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { UserProfile } from '../types';
+import { PixConfiguration } from './pix/PixConfiguration';
 import { 
   User, 
   Lock, 
   Camera, 
-  QrCode, 
   Save, 
   Loader2, 
   CheckCircle,
   AlertCircle,
-  Copy,
-  ShieldAlert,
-  Building2,
   LogOut
 } from 'lucide-react';
-
-// =========================================================
-// PIX PAYLOAD GENERATOR (BR CODE)
-// =========================================================
-const generatePixPayload = (key: string, name: string, txId: string = '***') => {
-  const DEFAULT_CITY = 'SAO PAULO';
-  const formatField = (id: string, value: string) => {
-    const len = value.length.toString().padStart(2, '0');
-    return `${id}${len}${value}`;
-  };
-  const cleanName = name.substring(0, 25).normalize('NFD').replace(/[\u0300-\u036f]/g, "");
-  const cleanCity = DEFAULT_CITY.substring(0, 15).normalize('NFD').replace(/[\u0300-\u036f]/g, "");
-  
-  let payload = 
-    formatField('00', '01') +
-    formatField('26', formatField('00', 'br.gov.bcb.pix') + formatField('01', key)) +
-    formatField('52', '0000') +
-    formatField('53', '986') +
-    formatField('58', 'BR') +
-    formatField('59', cleanName) +
-    formatField('60', cleanCity) +
-    formatField('62', formatField('05', txId));
-
-  payload += '6304';
-  
-  const polynomial = 0x1021;
-  let crc = 0xFFFF;
-  for (let i = 0; i < payload.length; i++) {
-    crc ^= payload.charCodeAt(i) << 8;
-    for (let j = 0; j < 8; j++) {
-      if ((crc & 0x8000) !== 0) { crc = (crc << 1) ^ polynomial; } 
-      else { crc = crc << 1; }
-    }
-  }
-  return payload + (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-};
-
 
 interface ProfileViewProps {
   session: any;
@@ -69,15 +29,11 @@ const ProfileView: React.FC<ProfileViewProps> = ({ session, onLogout }) => {
     id: session.user.id,
     full_name: '',
     email: session.user.email || '',
-    pix_key: '',
-    pix_key_type: 'email',
-    pix_name: '',
-    pix_bank: ''
+    // Campos de pix são gerenciados pelo PixConfiguration agora
   });
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [pixPayload, setPixPayload] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -116,10 +72,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({ session, onLogout }) => {
         const updates = {
             id: session.user.id,
             full_name: profile.full_name,
-            pix_key: profile.pix_key,
-            pix_key_type: profile.pix_key_type,
-            pix_name: profile.pix_name,
-            pix_bank: profile.pix_bank,
             updated_at: new Date().toISOString(),
         };
 
@@ -172,17 +124,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({ session, onLogout }) => {
       }
   };
 
-  const handleGenerateQrCode = () => {
-      if (!profile.pix_key || !profile.pix_name) {
-          alert("Preencha Chave e Nome para gerar o QR Code.");
-          return;
-      }
-      const payload = generatePixPayload(profile.pix_key, profile.pix_name);
-      setPixPayload(payload);
-  };
-
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
         
         {/* Header */}
         <div className="flex flex-col md:flex-row items-center gap-6 bg-white p-8 rounded-3xl shadow-soft border border-gray-100">
@@ -230,7 +173,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ session, onLogout }) => {
                     className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 shadow-lg shadow-black/10 transition-all text-sm w-full"
                 >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Salvar Alterações
+                    Salvar Dados
                 </button>
                 {onLogout && (
                     <button 
@@ -301,105 +244,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({ session, onLogout }) => {
 
             {/* RIGHT COLUMN: PIX & QR CODE */}
             <div className="space-y-8">
-                 <div className="bg-white p-8 rounded-3xl shadow-soft border border-gray-100 h-full flex flex-col">
-                    <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-lg font-bold text-apple-text flex items-center gap-2">
-                            <QrCode className="w-5 h-5 text-emerald-500" /> Configuração Pix
-                        </h3>
-                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">
-                            Receber
-                        </span>
-                    </div>
-
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex gap-3">
-                        <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0" />
-                        <p className="text-xs text-amber-800 leading-relaxed">
-                            <strong>Privacidade:</strong> Sua chave Pix não será exibida publicamente. Apenas o <strong>QR Code</strong> será mostrado.
-                        </p>
-                    </div>
-
-                    <div className="space-y-4 flex-grow">
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="col-span-1">
-                                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Tipo</label>
-                                <select 
-                                    value={profile.pix_key_type}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, pix_key_type: e.target.value as any }))}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:bg-white focus:border-apple-blue outline-none"
-                                >
-                                    <option value="cpf">CPF</option>
-                                    <option value="email">Email</option>
-                                    <option value="phone">Telefone</option>
-                                    <option value="random">Aleatória</option>
-                                </select>
-                            </div>
-                            <div className="col-span-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Chave Pix</label>
-                                <input 
-                                    type="text" 
-                                    value={profile.pix_key}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, pix_key: e.target.value }))}
-                                    placeholder="Sua chave"
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-apple-text focus:bg-white focus:border-apple-blue outline-none"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Nome do Beneficiário</label>
-                                <input 
-                                    type="text" 
-                                    value={profile.pix_name}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, pix_name: e.target.value }))}
-                                    placeholder="Seu Nome"
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:bg-white focus:border-apple-blue outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase ml-1 flex items-center gap-1"><Building2 className="w-3 h-3" /> Banco</label>
-                                <input 
-                                    type="text" 
-                                    value={profile.pix_bank || ''}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, pix_bank: e.target.value }))}
-                                    placeholder="Ex: Nubank"
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:bg-white focus:border-apple-blue outline-none"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="pt-6 border-t border-gray-100 mt-6">
-                        <button 
-                            onClick={handleGenerateQrCode}
-                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
-                        >
-                            <QrCode className="w-5 h-5" /> Testar QR Code
-                        </button>
-
-                        {pixPayload && (
-                            <div className="mt-6 bg-gray-50 rounded-2xl p-6 border border-gray-200 flex flex-col items-center animate-in zoom-in duration-300">
-                                <h4 className="text-sm font-bold text-gray-600 mb-4">Seu QR Code Pix</h4>
-                                <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-200">
-                                    <img 
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixPayload)}`} 
-                                        alt="Pix QR Code" 
-                                        className="w-40 h-40 mix-blend-multiply"
-                                    />
-                                </div>
-                                <button 
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(pixPayload);
-                                        alert("Código Copia e Cola copiado!");
-                                    }}
-                                    className="mt-4 w-full flex items-center justify-center gap-2 text-xs font-bold text-gray-600 hover:bg-gray-200 py-2 rounded-lg transition-colors"
-                                >
-                                    <Copy className="w-3 h-3" /> Copiar Código "Copia e Cola"
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                 </div>
+                 {/* Novo Componente Refatorado */}
+                 <PixConfiguration userId={session.user.id} />
             </div>
         </div>
     </div>
