@@ -11,6 +11,20 @@ interface NewIdeaModalProps {
   onSave: (idea: Omit<Idea, 'id' | 'votes_count' | 'is_building' | 'isFavorite' | 'created_at'>) => void;
 }
 
+// Componente Helper para Tooltips
+const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
+  <div className="group relative inline-flex items-center ml-1.5 align-middle z-50">
+    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-apple-blue transition-colors" />
+    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+      <div className="bg-gray-900/95 backdrop-blur-sm text-white text-[11px] font-medium py-2.5 px-3.5 rounded-xl shadow-xl border border-white/10 relative leading-relaxed text-center">
+        {text}
+        {/* Seta do tooltip */}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900/95"></div>
+      </div>
+    </div>
+  </div>
+);
+
 const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -171,7 +185,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
   };
 
   const inputClass = "w-full bg-white border border-gray-200 rounded-xl p-3 text-apple-text focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all";
-  const labelClass = "block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wide";
+  const labelClass = "block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wide flex items-center";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/30 backdrop-blur-md animate-in fade-in duration-300">
@@ -282,7 +296,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
               </div>
             </div>
 
-            {/* MONETIZATION SECTION (Moved Up for better flow with fields) */}
+            {/* MONETIZATION SECTION */}
             <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-2xl border border-gray-200">
                 <h3 className="text-sm font-bold text-apple-text mb-4 flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-green-600" /> Monetização do Projeto
@@ -368,7 +382,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
             {/* Core Idea */}
             <div>
               <div className="flex justify-between items-end mb-1.5">
-                <label className={labelClass + " mb-0"}>A Dor (Problema)</label>
+                <label className={labelClass + " mb-0"}>
+                    A Dor (Problema) 
+                    <InfoTooltip text="Qual dor ou dificuldade os clientes enfrentam no dia a dia que este produto vai resolver?" />
+                </label>
                 {renderVisibilityToggle('pain')}
               </div>
               <textarea required name="pain" value={formData.pain} onChange={handleChange} className={`${inputClass} h-24 resize-none`} placeholder="Qual é o problema real?" />
@@ -376,7 +393,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
 
             <div>
               <div className="flex justify-between items-end mb-1.5">
-                <label className={labelClass + " mb-0"}>A Solução</label>
+                <label className={labelClass + " mb-0"}>
+                    A Solução
+                    <InfoTooltip text="Como este produto elimina o problema dos clientes de forma simples e eficaz?" />
+                </label>
                 {renderVisibilityToggle('solution')}
               </div>
               <textarea required name="solution" value={formData.solution} onChange={handleChange} className={`${inputClass} h-24 resize-none`} placeholder="Como resolver isso?" />
@@ -387,7 +407,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <FileCode className="w-4 h-4 text-indigo-600" />
-                    <label className="text-xs font-bold text-indigo-800 uppercase tracking-wide">PDR (Tech Specs)</label>
+                    <label className="text-xs font-bold text-indigo-800 uppercase tracking-wide flex items-center">
+                        PDR (Tech Specs)
+                        <InfoTooltip text="Quais tecnologias e funcionalidades técnicas são necessárias para desenvolver este produto?" />
+                    </label>
                   </div>
                   {renderVisibilityToggle('pdr')}
                </div>
@@ -402,14 +425,35 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
 
             {/* Extra Info */}
             <div>
-               <label className={labelClass}>Diferencial</label>
+               <label className={labelClass}>
+                   Diferencial (Why)
+                   <InfoTooltip text="Por que os clientes devem escolher este produto e não a concorrência? O que o torna único?" />
+               </label>
                <input required name="why" value={formData.why} onChange={handleChange} className={inputClass} placeholder="Por que isso vai funcionar?" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-                <div><label className={labelClass}>Modelo de Receita</label><input required name="pricing_model" value={formData.pricing_model} onChange={handleChange} className={inputClass} placeholder="Ex: SaaS" /></div>
-                <div><label className={labelClass}>Público Alvo</label><input required name="target" value={formData.target} onChange={handleChange} className={inputClass} placeholder="Ex: B2B" /></div>
-                <div><label className={labelClass}>Estratégia</label><input required name="sales_strategy" value={formData.sales_strategy} onChange={handleChange} className={inputClass} placeholder="Ex: SEO" /></div>
+                <div>
+                    <label className={labelClass}>
+                        Modelo de Receita
+                        <InfoTooltip text="Como este negócio gera receita? Ex: assinatura mensal, venda única, comissões, etc." />
+                    </label>
+                    <input required name="pricing_model" value={formData.pricing_model} onChange={handleChange} className={inputClass} placeholder="Ex: SaaS" />
+                </div>
+                <div>
+                    <label className={labelClass}>
+                        Público Alvo
+                        <InfoTooltip text="Quem são as pessoas que vão comprar este produto? Descreva idade, interesses e necessidades." />
+                    </label>
+                    <input required name="target" value={formData.target} onChange={handleChange} className={inputClass} placeholder="Ex: B2B" />
+                </div>
+                <div>
+                    <label className={labelClass}>
+                        Estratégia
+                        <InfoTooltip text="Qual é o plano para atrair clientes e fechar vendas? Ex: redes sociais, anúncios, indicações." />
+                    </label>
+                    <input required name="sales_strategy" value={formData.sales_strategy} onChange={handleChange} className={inputClass} placeholder="Ex: SEO" />
+                </div>
             </div>
 
           </form>

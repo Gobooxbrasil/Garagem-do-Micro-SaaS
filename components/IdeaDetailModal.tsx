@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Idea, UserProfile } from '../types';
+import { Idea, UserProfile, Improvement } from '../types';
 import { 
   X, 
   AlertCircle, 
@@ -39,7 +39,11 @@ import {
   CheckCircle,
   Eye,
   Unlock,
-  User
+  User,
+  Info,
+  Hammer,
+  MessageSquarePlus,
+  Hash
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
@@ -50,9 +54,24 @@ interface IdeaDetailModalProps {
   onToggleBuild: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onRequestPdr: (ideaId: string, ownerId: string, ideaTitle: string, message: string) => Promise<void>;
+  onJoinTeam?: (ideaId: string) => Promise<void>;
+  onAddImprovement?: (ideaId: string, content: string) => Promise<void>;
 }
 
-// Helper: Generate Pix
+// Componente Helper para Tooltips
+const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
+  <div className="group relative inline-flex items-center ml-1.5 align-middle z-50">
+    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-apple-blue transition-colors" />
+    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+      <div className="bg-gray-900/95 backdrop-blur-sm text-white text-[11px] font-medium py-2.5 px-3.5 rounded-xl shadow-xl border border-white/10 relative leading-relaxed text-center">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900/95"></div>
+      </div>
+    </div>
+  </div>
+);
+
+// Helper: Generate Pix (Mantido igual)
 const generatePixPayload = (key: string, name: string, txId: string = '***', amount?: number) => {
   const DEFAULT_CITY = 'SAO PAULO';
   const formatField = (id: string, value: string) => {
@@ -120,13 +139,15 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   onUpvote, 
   onToggleBuild, 
   onToggleFavorite,
-  onRequestPdr
+  onRequestPdr,
+  onJoinTeam,
+  onAddImprovement
 }) => {
-  const [isRequesting, setIsRequesting] = useState(false);
-  const [requestMessage, setRequestMessage] = useState('');
-  const [requestSent, setRequestSent] = useState(false);
-  const [sending, setSending] = useState(false);
   const [activeImage, setActiveImage] = useState<string | null>(null);
+
+  // Improvements State
+  const [newImprovement, setNewImprovement] = useState('');
+  const [submittingImprovement, setSubmittingImprovement] = useState(false);
 
   // Payment / Donation State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -149,23 +170,33 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const hasVotes = idea.votes_count > 0;
   
   const isPaidContent = idea.monetization_type === 'PAID';
-  // Hidden logic: Paid content + field is in hidden_fields + NOT unlocked + NOT owner
   const isHidden = (field: string) => isPaidContent && idea.hidden_fields?.includes(field) && !isUnlocked && !isOwner;
 
-  const handleSendRequest = async () => {
-    if (!requestMessage.trim()) return;
-    if (!idea.user_id) return;
-    setSending(true);
-    try {
-        await onRequestPdr(idea.id, idea.user_id, idea.title, requestMessage);
-        setRequestSent(true);
-        setIsRequesting(false);
-    } catch (error) {
-        console.error(error);
-        alert("Erro ao enviar solicitação.");
-    } finally {
-        setSending(false);
-    }
+  // Verificar se o usuário atual é um desenvolvedor
+  const isDeveloper = idea.idea_developers?.some(dev => dev.user_id === currentUserId);
+
+  const handleJoin = async () => {
+      if (!onJoinTeam) return;
+      try {
+          await onJoinTeam(idea.id);
+      } catch (error) {
+          console.error(error);
+      }
+  };
+
+  const submitImprovement = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newImprovement.trim() || !onAddImprovement) return;
+      
+      setSubmittingImprovement(true);
+      try {
+          await onAddImprovement(idea.id, newImprovement);
+          setNewImprovement('');
+      } catch (error) {
+          alert("Erro ao enviar melhoria.");
+      } finally {
+          setSubmittingImprovement(false);
+      }
   };
 
   const handleOpenPayment = async (type: 'DONATION' | 'PURCHASE') => {
@@ -220,76 +251,35 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
               <button onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
                   <X className="w-4 h-4 text-gray-500" />
               </button>
-
-              <div className="text-center mb-6">
-                  <div className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-3 ${paymentType === 'DONATION' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
-                      {paymentType === 'DONATION' ? <Gift className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
-                  </div>
+               <div className="text-center mb-6">
                   <h3 className="text-lg font-bold text-apple-text">
                       {paymentType === 'DONATION' ? 'Apoiar o Projeto' : 'Comprar Acesso'}
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                      {paymentType === 'DONATION' ? 'Incentive o criador com uma doação.' : `Valor para acesso completo: R$ ${idea.price?.toFixed(2)}`}
-                  </p>
-              </div>
-
-              {!pixPayload && paymentType === 'DONATION' && (
-                  <div className="space-y-4">
-                      <label className="block text-xs font-bold text-gray-500 uppercase">Valor da Doação (Opcional)</label>
-                      <div className="relative">
-                          <span className="absolute left-3 top-3 text-gray-500 font-bold">R$</span>
-                          <input 
-                              type="number" 
-                              value={donationAmount} 
-                              onChange={(e) => setDonationAmount(e.target.value)}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:bg-white transition-all"
-                              placeholder="0.00" 
-                          />
-                      </div>
-                      <button onClick={generatePaymentPix} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-colors">
-                          Gerar Pix
-                      </button>
+                  <div className="mt-4">
+                      {paymentType === 'DONATION' && (
+                          <div className="mb-4">
+                              <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Valor da Doação (R$)</label>
+                              <input 
+                                  type="number" 
+                                  value={donationAmount}
+                                  onChange={(e) => setDonationAmount(e.target.value)}
+                                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold text-lg"
+                                  placeholder="0.00"
+                              />
+                          </div>
+                      )}
+                      {!pixPayload && (
+                           <button onClick={generatePaymentPix} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">
+                             Gerar Pix (Simulado)
+                           </button>
+                      )}
+                      {pixPayload && (
+                           <div className="mt-4 p-4 bg-gray-50 rounded-xl break-all text-xs font-mono border border-gray-200">
+                               {pixPayload}
+                           </div>
+                      )}
                   </div>
-              )}
-
-              {!pixPayload && paymentType === 'PURCHASE' && (
-                  <div className="text-center space-y-4">
-                      <div className="text-xs text-gray-500 bg-gray-50 p-4 rounded-xl border border-gray-200 text-left">
-                          <p className="font-bold text-gray-800 mb-1">O que está incluso?</p>
-                          <ul className="list-disc list-inside space-y-1">
-                              <li>Acesso aos campos ocultos (PDR, Solução).</li>
-                              <li>Contato direto com o criador.</li>
-                          </ul>
-                      </div>
-                      <button onClick={generatePaymentPix} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-green-700 transition-colors">
-                          Gerar Pix
-                      </button>
-                  </div>
-              )}
-
-              {/* QR CODE DISPLAY */}
-              {pixPayload && (
-                  <div className="text-center animate-in zoom-in duration-300">
-                     <h4 className="text-sm font-bold text-gray-600 mb-4">Escaneie para Pagar</h4>
-                     <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 inline-block mb-4">
-                        <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixPayload)}`} 
-                            alt="Pix QR Code" 
-                            className="w-48 h-48 mix-blend-multiply"
-                        />
-                     </div>
-                     <p className="text-xs text-gray-500 mb-4 max-w-[200px] mx-auto break-all bg-gray-50 p-2 rounded border border-gray-100 font-mono">
-                        {pixPayload.slice(0, 20)}...
-                     </p>
-                     <button 
-                        onClick={() => { navigator.clipboard.writeText(pixPayload); alert("Código Copia e Cola copiado!"); }}
-                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-                     >
-                        <Copy className="w-4 h-4" /> Copiar "Copia e Cola"
-                     </button>
-                  </div>
-              )}
-
+               </div>
           </div>
       </div>
   );
@@ -307,43 +297,33 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                       <VisualIcon className={`w-16 h-16 ${visuals.text} opacity-50`} />
                  </div>
             )}
+            
+            {/* Botão Fechar (PRETO) */}
             <button 
                 onClick={onClose} 
-                className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-white/40 transition-colors z-20"
+                className="absolute top-4 right-4 bg-black/90 p-2 rounded-full text-white hover:bg-black transition-colors z-20 shadow-lg border border-white/20"
+                title="Fechar"
             >
                 <X className="w-5 h-5" />
             </button>
+
             <div className="absolute top-4 left-4 flex gap-2">
                  <span className="bg-white/90 backdrop-blur-md text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm">
                     {idea.niche}
                  </span>
-                 {idea.monetization_type === 'PAID' && (
-                     <span className="bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1">
-                        <DollarSign className="w-3 h-3" /> R$ {idea.price}
-                     </span>
-                 )}
+                 {/* UUID Badge (Código Único) */}
+                 <span className="bg-black/80 backdrop-blur-md text-white text-xs font-mono px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 border border-white/10" title="Código Único do Projeto">
+                    <Hash className="w-3 h-3 text-gray-400" />
+                    {idea.short_id ? idea.short_id.toUpperCase() : 'NO-CODE'}
+                 </span>
             </div>
-            {/* Gallery Thumbs (if > 1) */}
-            {images.length > 1 && (
-                <div className="absolute bottom-4 right-4 flex gap-2">
-                    {images.map((img, idx) => (
-                        <button 
-                            key={idx}
-                            onClick={() => setActiveImage(img)}
-                            className={`w-10 h-10 rounded-lg overflow-hidden border-2 ${activeImage === img ? 'border-white' : 'border-white/50 opacity-70'} hover:opacity-100 transition-all shadow-md`}
-                        >
-                            <img src={img} alt="" className="w-full h-full object-cover" />
-                        </button>
-                    ))}
-                </div>
-            )}
         </div>
 
         {/* Content Body */}
         <div className="flex-grow overflow-y-auto custom-scrollbar bg-white relative">
             <div className="p-8 pb-32">
                  {/* Title & Author */}
-                 <div className="flex justify-between items-start mb-6">
+                 <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
                     <div>
                         <h2 className="text-3xl font-bold text-apple-text mb-2 leading-tight">{idea.title}</h2>
                         <div className="flex items-center gap-3 text-sm text-gray-500">
@@ -358,27 +338,28 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                         </div>
                     </div>
                     
-                    <div className="flex gap-2">
-                         <button 
-                             onClick={() => onUpvote(idea.id)}
-                             className={`flex flex-col items-center justify-center w-14 h-14 rounded-2xl border transition-all ${hasVotes ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
-                         >
-                             <Flame className={`w-5 h-5 ${hasVotes ? 'fill-orange-500' : ''}`} />
-                             <span className="text-xs font-bold mt-0.5">{idea.votes_count}</span>
-                         </button>
-                    </div>
+                    {/* Votes */}
+                    <button 
+                        onClick={() => onUpvote(idea.id)}
+                        className={`flex flex-col items-center justify-center w-14 h-14 rounded-2xl border transition-all flex-shrink-0 ${hasVotes ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                    >
+                        <Flame className={`w-5 h-5 ${hasVotes ? 'fill-orange-500' : ''}`} />
+                        <span className="text-xs font-bold mt-0.5">{idea.votes_count}</span>
+                    </button>
                  </div>
 
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                      
                      {/* Left: Main Content (2/3) */}
-                     <div className="lg:col-span-2 space-y-8">
+                     <div className="lg:col-span-2 space-y-10">
                          
                          {/* Pain & Solution */}
-                         <div className="space-y-6">
+                         <div className="space-y-8">
                              <div>
-                                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                     <AlertCircle className="w-4 h-4" /> O Problema (Dor)
+                                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                     <AlertCircle className="w-4 h-4" /> 
+                                     O Problema (Dor)
+                                     <InfoTooltip text="Qual dor ou dificuldade os clientes enfrentam no dia a dia que este produto vai resolver?" />
                                  </h3>
                                  {isHidden('pain') ? renderLockedContent('A Dor') : (
                                      <p className="text-lg text-gray-800 leading-relaxed font-light">{idea.pain}</p>
@@ -386,8 +367,10 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                              </div>
                              
                              <div>
-                                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                     <CheckCircle2 className="w-4 h-4" /> A Solução
+                                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                     <CheckCircle2 className="w-4 h-4" /> 
+                                     A Solução
+                                     <InfoTooltip text="Como este produto elimina o problema dos clientes de forma simples e eficaz?" />
                                  </h3>
                                  {isHidden('solution') ? renderLockedContent('A Solução') : (
                                      <p className="text-lg text-gray-800 leading-relaxed font-light">{idea.solution}</p>
@@ -395,10 +378,12 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                              </div>
                          </div>
 
-                         {/* PDR Section (Tech Specs) */}
+                         {/* PDR Section */}
                          <div>
                              <h3 className="text-sm font-bold text-indigo-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                 <FileCode className="w-4 h-4" /> Tech Specs (PDR)
+                                 <FileCode className="w-4 h-4" /> 
+                                 Tech Specs (PDR)
+                                 <InfoTooltip text="Quais tecnologias e funcionalidades técnicas são necessárias para desenvolver este produto?" />
                              </h3>
                              {isHidden('pdr') ? renderLockedContent('o PDR Completo') : (
                                  <div className="bg-slate-900 text-slate-300 p-6 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap border border-slate-800 shadow-inner">
@@ -407,70 +392,133 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                              )}
                          </div>
 
-                         {/* Request PDR / Contact Access */}
-                         {!isOwner && (
-                            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-                                <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                                    <HelpCircle className="w-4 h-4" /> Interessado em desenvolver?
-                                </h4>
-                                <p className="text-sm text-gray-500 mb-4">
-                                    Envie uma mensagem direta ao autor pedindo permissão ou propondo parceria.
-                                </p>
-                                {requestSent ? (
-                                    <div className="bg-green-100 text-green-700 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2">
-                                        <CheckCircle className="w-4 h-4" /> Solicitação enviada com sucesso!
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            value={requestMessage}
-                                            onChange={(e) => setRequestMessage(e.target.value)}
-                                            placeholder="Ex: Sou dev React e gostaria de construir isso..."
-                                            className="flex-grow bg-white border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-apple-blue"
-                                        />
-                                        <button 
-                                            onClick={handleSendRequest}
-                                            disabled={sending || !requestMessage}
-                                            className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-800 disabled:opacity-50 transition-colors flex items-center gap-2"
-                                        >
-                                            {sending ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4" />}
-                                            Enviar
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                         )}
+                         {/* MELHORIAS SUGERIDAS (NOVA SEÇÃO) */}
+                         <div className="pt-8 border-t border-gray-100">
+                             <h3 className="text-lg font-bold text-apple-text mb-6 flex items-center gap-2">
+                                <MessageSquarePlus className="w-5 h-5 text-gray-400" />
+                                Melhorias Sugeridas
+                             </h3>
+                             
+                             {/* List */}
+                             <div className="space-y-4 mb-6">
+                                 {(!idea.idea_improvements || idea.idea_improvements.length === 0) && (
+                                     <p className="text-gray-400 text-sm italic bg-gray-50 p-4 rounded-xl text-center">
+                                         Nenhuma sugestão ainda. Seja o primeiro a colaborar!
+                                     </p>
+                                 )}
+                                 {idea.idea_improvements?.map((imp) => (
+                                     <div key={imp.id} className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
+                                         <div className="flex items-center gap-2 mb-2">
+                                             <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden">
+                                                 {imp.profiles?.avatar_url ? (
+                                                     <img src={imp.profiles.avatar_url} className="w-full h-full object-cover"/>
+                                                 ) : (
+                                                     <User className="w-3 h-3 m-1.5 text-gray-400"/>
+                                                 )}
+                                             </div>
+                                             <span className="text-xs font-bold text-gray-700">{imp.profiles?.full_name || 'Anônimo'}</span>
+                                             <span className="text-[10px] text-gray-400 ml-auto">{new Date(imp.created_at).toLocaleDateString()}</span>
+                                         </div>
+                                         <p className="text-sm text-gray-600 leading-relaxed">{imp.content}</p>
+                                     </div>
+                                 ))}
+                             </div>
+
+                             {/* Input */}
+                             <form onSubmit={submitImprovement} className="flex gap-3 items-start">
+                                 <div className="flex-grow relative">
+                                     <textarea 
+                                         required
+                                         value={newImprovement}
+                                         onChange={(e) => setNewImprovement(e.target.value)}
+                                         placeholder="Sugira uma feature ou melhoria..."
+                                         className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:bg-white focus:border-apple-blue outline-none transition-all resize-none h-20"
+                                     ></textarea>
+                                 </div>
+                                 <button 
+                                     type="submit"
+                                     disabled={submittingImprovement || !newImprovement.trim()}
+                                     className="bg-apple-text hover:bg-black text-white p-3 rounded-xl shadow-lg shadow-black/10 transition-all disabled:opacity-50"
+                                 >
+                                     {submittingImprovement ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5"/>}
+                                 </button>
+                             </form>
+                         </div>
 
                      </div>
 
                      {/* Right: Meta Info (1/3) */}
                      <div className="space-y-6">
                          
-                         {/* Stats Card */}
+                         {/* Meta Card */}
                          <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 space-y-4">
+                             {/* ... (Existing Meta Fields) ... */}
                              <div>
-                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Modelo de Receita</label>
+                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
+                                     Modelo de Receita
+                                     <InfoTooltip text="Como este negócio gera receita? Ex: assinatura mensal, venda única, comissões, etc." />
+                                 </label>
                                  <p className="font-semibold text-gray-800 flex items-center gap-2">
                                      <DollarSign className="w-4 h-4 text-green-600" /> {idea.pricing_model}
                                  </p>
                              </div>
                              <div>
-                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Público Alvo</label>
-                                 <p className="font-semibold text-gray-800 flex items-center gap-2">
-                                     <Users className="w-4 h-4 text-blue-600" /> {idea.target}
-                                 </p>
-                             </div>
-                             <div>
-                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Estratégia de Venda</label>
-                                 <p className="font-semibold text-gray-800 flex items-center gap-2">
-                                     <TrendingUp className="w-4 h-4 text-purple-600" /> {idea.sales_strategy}
-                                 </p>
-                             </div>
-                             <div className="pt-4 border-t border-gray-200">
-                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Diferencial (Why)</label>
+                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
+                                     Diferencial
+                                     <InfoTooltip text="Por que os clientes devem escolher este produto e não a concorrência? O que o torna único?" />
+                                 </label>
                                  <p className="text-sm text-gray-600 italic mt-1">"{idea.why}"</p>
                              </div>
+                         </div>
+
+                         {/* DEVELOPERS SECTION */}
+                         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <Hammer className="w-4 h-4 text-amber-500" /> Squad de Desenvolvimento
+                            </h4>
+                            
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                {idea.idea_developers && idea.idea_developers.length > 0 ? (
+                                    idea.idea_developers.map((dev) => (
+                                        <div key={dev.id} className="relative group/dev cursor-help">
+                                            <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-gray-100 overflow-hidden">
+                                                {dev.profiles?.avatar_url ? (
+                                                    <img src={dev.profiles.avatar_url} className="w-full h-full object-cover"/>
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400"><User className="w-5 h-5"/></div>
+                                                )}
+                                            </div>
+                                            {/* Tooltip Name */}
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/dev:block whitespace-nowrap bg-black text-white text-xs px-2 py-1 rounded-lg z-50">
+                                                {dev.profiles?.full_name || 'Dev'}
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-xs text-gray-400 italic">Nenhum desenvolvedor ainda.</p>
+                                )}
+                            </div>
+
+                            {/* BOTÃO QUERO DESENVOLVER */}
+                            <button 
+                                onClick={handleJoin}
+                                disabled={isDeveloper}
+                                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 border transition-all ${
+                                    isDeveloper 
+                                    ? 'bg-green-50 text-green-700 border-green-200 cursor-default' 
+                                    : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-lg shadow-amber-500/20'
+                                }`}
+                             >
+                                 {isDeveloper ? (
+                                     <>
+                                        <CheckCircle className="w-4 h-4" /> Você está no time
+                                     </>
+                                 ) : (
+                                     <>
+                                        <Hammer className="w-4 h-4" /> Quero Desenvolver
+                                     </>
+                                 )}
+                             </button>
                          </div>
 
                          {/* Actions */}
@@ -480,20 +528,10 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                                 className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 border transition-all ${idea.isFavorite ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                              >
                                  <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-600' : ''}`} /> 
-                                 {idea.isFavorite ? 'Favoritado' : 'Adicionar aos Favoritos'}
+                                 {idea.isFavorite ? 'Favoritado' : 'Favoritar'}
                              </button>
 
-                             {isOwner && (
-                                 <button 
-                                    onClick={() => onToggleBuild(idea.id)}
-                                    className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 border transition-all ${idea.is_building ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                                 >
-                                     <Rocket className="w-4 h-4" /> 
-                                     {idea.is_building ? 'Em Construção' : 'Marcar como Em Construção'}
-                                 </button>
-                             )}
-
-                             {/* Monetization Actions for Non-Owners */}
+                             {/* Monetization Actions */}
                              {!isOwner && idea.monetization_type === 'DONATION' && (
                                  <button 
                                     onClick={() => handleOpenPayment('DONATION')}
@@ -511,7 +549,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                                      <Lock className="w-4 h-4" /> Comprar Acesso (R$ {idea.price})
                                  </button>
                              )}
-
                          </div>
 
                      </div>
@@ -519,7 +556,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
             </div>
         </div>
         
-        {/* Modals */}
         {showPaymentModal && renderPaymentModal()}
 
       </div>

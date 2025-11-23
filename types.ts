@@ -1,7 +1,28 @@
 
+export interface Developer {
+  id: string; // ID da relação
+  user_id: string;
+  profiles?: {
+    full_name: string;
+    avatar_url: string;
+  };
+  created_at: string;
+}
+
+export interface Improvement {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  profiles?: {
+    full_name: string;
+    avatar_url: string;
+  };
+}
 
 export interface Idea {
   id: string;
+  short_id?: string; // Código Único (ex: PROJ-1234)
   niche: string;
   title: string;
   pain: string;
@@ -30,6 +51,10 @@ export interface Idea {
     full_name: string;
     avatar_url: string;
   };
+
+  // New Relations
+  idea_developers?: Developer[];
+  idea_improvements?: Improvement[];
 }
 
 export interface Review {
@@ -69,12 +94,13 @@ export interface Notification {
   recipient_id: string;
   sender_id: string;
   sender_email?: string;
-  type: 'PDR_REQUEST' | 'SYSTEM';
+  type: 'PDR_REQUEST' | 'SYSTEM' | 'NEW_IMPROVEMENT' | 'NEW_DEV';
   read: boolean;
   payload: {
     idea_id?: string;
     idea_title?: string;
     message?: string;
+    user_name?: string;
   };
 }
 

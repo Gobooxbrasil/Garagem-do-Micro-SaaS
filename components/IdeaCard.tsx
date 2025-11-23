@@ -75,14 +75,14 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const renderMonetizationBadge = () => {
     if (idea.monetization_type === 'PAID') {
         return (
-            <div className="absolute top-3 right-14 z-20 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
+            <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
                 <Lock className="w-3 h-3" /> R$ {idea.price}
             </div>
         );
     }
     if (idea.monetization_type === 'DONATION') {
         return (
-            <div className="absolute top-3 right-14 z-20 bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
+            <div className="bg-blue-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
                 <Gift className="w-3 h-3" /> Apoiar
             </div>
         );
@@ -184,16 +184,15 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
         {/* Gradient Overlay (Suave para visibilidade dos ícones) */}
         <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
         
-        {/* Overlaid Tags */}
+        {/* Overlaid Tags (LEFT SIDE) - Included Monetization Badge Here */}
         <div className="absolute top-3 left-3 flex gap-2 z-20">
             <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
-            {idea.niche}
+              {idea.niche}
             </span>
+            {renderMonetizationBadge()}
         </div>
-
-        {renderMonetizationBadge()}
         
-        {/* Actions Top Right */}
+        {/* Actions Top Right (RIGHT SIDE) */}
         <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
              {isOwner && onDelete && (
                  <button 
