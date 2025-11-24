@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { useAdminUsers, useBlockUser, useUnblockUser } from '../../hooks/use-admin';
-import { Search, MoreHorizontal, Shield, Ban, CheckCircle, Trash2, Loader2, X } from 'lucide-react';
+import { useAdminUsers, useBlockUser, useUnblockUser, useToggleAdmin } from '../../hooks/use-admin';
+import { Search, MoreHorizontal, Shield, Ban, CheckCircle, Trash2, Loader2, X, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface AdminUsersProps {
     session: any;
@@ -19,6 +19,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
     
     const blockMutation = useBlockUser();
     const unblockMutation = useUnblockUser();
+    const toggleAdminMutation = useToggleAdmin();
 
     const handleBlock = () => {
         if (!selectedUser || !blockReason) return;
@@ -38,6 +39,17 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
     const handleUnblock = (userId: string) => {
         if (confirm('Tem certeza que deseja desbloquear este usuário?')) {
             unblockMutation.mutate({ userId, adminId: session.user.id });
+        }
+    };
+
+    const handleToggleAdmin = (user: any) => {
+        const action = user.is_admin ? 'remover' : 'conceder';
+        if (confirm(`Tem certeza que deseja ${action} permissão de ADMINISTRADOR para ${user.full_name}?`)) {
+            toggleAdminMutation.mutate({ 
+                userId: user.id, 
+                isAdmin: !user.is_admin, 
+                adminId: session.user.id 
+            });
         }
     };
 
@@ -111,6 +123,14 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex items-center justify-end gap-2">
+                                        <button 
+                                            onClick={() => handleToggleAdmin(user)}
+                                            className={`p-2 rounded-lg transition-colors ${user.is_admin ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600'}`}
+                                            title={user.is_admin ? "Remover Admin" : "Tornar Admin"}
+                                        >
+                                            {user.is_admin ? <ShieldCheck className="w-4 h-4"/> : <Shield className="w-4 h-4"/>}
+                                        </button>
+
                                         {user.is_blocked ? (
                                             <button onClick={() => handleUnblock(user.id)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg" title="Desbloquear"><CheckCircle className="w-4 h-4"/></button>
                                         ) : (

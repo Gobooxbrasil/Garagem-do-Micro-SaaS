@@ -409,10 +409,10 @@ const App: React.FC = () => {
     }
   };
 
-  const niches = useMemo(() => {
+  const niches = useMemo<string[]>(() => {
     if (!rawIdeas) return ['Todos'];
     const allNiches = rawIdeas.map(i => i.niche);
-    return ['Todos', ...Array.from(new Set(allNiches))];
+    return ['Todos', ...Array.from(new Set(allNiches)) as string[]];
   }, [rawIdeas]);
 
   const filteredIdeas = useMemo(() => {

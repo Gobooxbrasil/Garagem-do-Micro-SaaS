@@ -118,6 +118,31 @@ export function useUnblockUser() {
     });
 }
 
+// TOGGLE ADMIN
+export function useToggleAdmin() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ userId, isAdmin, adminId }: { userId: string; isAdmin: boolean; adminId: string }) => {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ is_admin: isAdmin })
+                .eq('id', userId);
+            
+            if (error) throw error;
+
+            await supabase.from('admin_logs').insert({
+                admin_id: adminId,
+                action: isAdmin ? 'user_promoted_admin' : 'user_demoted_admin',
+                target_type: 'user',
+                target_id: userId
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+        }
+    });
+}
+
 // LOGS
 export function useAdminLogs() {
   return useQuery({

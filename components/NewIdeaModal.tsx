@@ -7,7 +7,8 @@ import { PRESET_NICHES } from '../constants';
 interface NewIdeaModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (idea: Omit<Idea, 'id' | 'votes_count' | 'is_building' | 'isFavorite' | 'created_at'>) => void;
+  onSave: (idea: any) => void; // Relaxed type to handle both create and update payload
+  initialData?: Idea | null;
 }
 
 // Componente Helper para Tooltips
@@ -23,7 +24,7 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
-const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) => {
+const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   
@@ -36,7 +37,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
     pain: '',
     solution: '',
     why: '',
-    why_is_private: false, // CORREÇÃO: Usando o nome correto da coluna
+    why_is_private: false,
     pricing_model: '',
     target: '',
     sales_strategy: '',
@@ -50,6 +51,37 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
     contact_phone: '',
     contact_email: ''
   });
+
+  // Populate form on open/edit
+  useEffect(() => {
+    if (isOpen && initialData) {
+        setFormData({
+            title: initialData.title || '',
+            niche: initialData.niche || '',
+            pain: initialData.pain || '',
+            solution: initialData.solution || '',
+            why: initialData.why || '',
+            why_is_private: initialData.why_is_private || false,
+            pricing_model: initialData.pricing_model || '',
+            target: initialData.target || '',
+            sales_strategy: initialData.sales_strategy || '',
+            pdr: initialData.pdr || '',
+            images: initialData.images || [],
+            monetization_type: (initialData.monetization_type as any) || 'NONE',
+            price: initialData.price ? String(initialData.price) : '',
+            hidden_fields: initialData.hidden_fields || [],
+            contact_phone: initialData.contact_phone || '',
+            contact_email: initialData.contact_email || ''
+        });
+    } else if (isOpen && !initialData) {
+        // Reset
+        setFormData({
+            title: '', niche: '', pain: '', solution: '', why: '', why_is_private: false,
+            pricing_model: '', target: '', sales_strategy: '', pdr: '', images: [],
+            monetization_type: 'NONE', price: '', hidden_fields: [], contact_phone: '', contact_email: ''
+        });
+    }
+  }, [isOpen, initialData]);
 
   if (!isOpen) return null;
 
@@ -70,31 +102,12 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
 
     onSave({
         ...formData,
+        id: initialData?.id, // Pass ID if editing
         price: formData.price ? Number(formData.price) : undefined,
-        // Garante que why_is_private seja boolean
         why_is_private: !!formData.why_is_private 
     });
     
     onClose();
-    // Reset form
-    setFormData({
-      title: '',
-      niche: '',
-      pain: '',
-      solution: '',
-      why: '',
-      why_is_private: false,
-      pricing_model: '',
-      target: '',
-      sales_strategy: '',
-      pdr: '',
-      images: [],
-      monetization_type: 'NONE',
-      price: '',
-      hidden_fields: [],
-      contact_phone: '',
-      contact_email: ''
-    });
     setError(null);
     setShowNicheList(false);
   };
@@ -197,9 +210,9 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <div>
             <h2 className="text-2xl font-bold text-apple-text tracking-tight flex items-center gap-2">
-              <Lightbulb className="w-6 h-6 text-yellow-500 fill-yellow-500" /> Nova Ideia
+              <Lightbulb className="w-6 h-6 text-yellow-500 fill-yellow-500" /> {initialData ? 'Editar Ideia' : 'Nova Ideia'}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">Compartilhe um problema que precisa de solução.</p>
+            <p className="text-sm text-gray-500 mt-1">{initialData ? 'Atualize os detalhes do projeto.' : 'Compartilhe um problema que precisa de solução.'}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
             <X className="w-5 h-5" />
@@ -363,14 +376,14 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className={labelClass}>Email de Contato (Obrigatório)</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Email de Contato (Obrigatório)</label>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                                     <input required type="email" name="contact_email" value={formData.contact_email} onChange={handleChange} className={`${inputClass} pl-10`} placeholder="seu@email.com" />
                                 </div>
                             </div>
                             <div>
-                                <label className={labelClass}>WhatsApp/Telefone (Obrigatório)</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase ml-1">WhatsApp/Telefone (Obrigatório)</label>
                                 <div className="relative">
                                     <Phone className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                                     <input required type="text" name="contact_phone" value={formData.contact_phone} onChange={handleChange} className={`${inputClass} pl-10`} placeholder="(11) 99999-9999" />
@@ -480,7 +493,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave }) 
         <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-3xl flex justify-end gap-4 relative z-30">
           <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-600 hover:text-black font-medium transition-colors">Cancelar</button>
           <button type="submit" form="ideaForm" className="bg-black hover:bg-gray-800 text-white font-medium py-2.5 px-8 rounded-full shadow-lg shadow-black/20 transition-all hover:scale-105">
-            Publicar
+            {initialData ? 'Salvar Alterações' : 'Publicar'}
           </button>
         </div>
       </div>
