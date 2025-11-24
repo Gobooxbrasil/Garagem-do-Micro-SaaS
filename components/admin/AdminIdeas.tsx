@@ -1,9 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { SEED_IDEAS } from '../../lib/seed-ideas';
 import { useIdeas } from '../../hooks/use-ideas-cache';
-import { Search, Loader2, Trash2, Edit2, Plus, UploadCloud, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare } from 'lucide-react';
+import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet } from 'lucide-react';
 import NewIdeaModal from '../NewIdeaModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -17,6 +16,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     const [search, setSearch] = useState('');
     const { data: ideas, isLoading } = useIdeas({ search });
     const queryClient = useQueryClient();
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // States de Modal e Importação
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -131,41 +131,147 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
     };
 
-    const handleImportSeed = async () => {
-        if (!confirm(`Isso irá importar ${SEED_IDEAS.length} ideias do documento PDF original para o banco de dados. Continuar?`)) return;
-        
-        setIsImporting(true);
-        
-        try {
-            const rows = SEED_IDEAS.map(seed => ({
-                title: seed.title,
-                niche: seed.niche,
-                pain: seed.pain,
-                solution: seed.solution,
-                why: seed.why,
-                pricing_model: seed.pricing_model,
-                target: seed.target,
-                sales_strategy: seed.sales_strategy,
-                pdr: seed.pdr,
-                user_id: session.user.id,
-                votes_count: 0,
-                is_building: false,
-                created_at: new Date().toISOString(),
-                short_id: Math.random().toString(36).substring(2, 8).toUpperCase()
-            }));
+    // --- LÓGICA DE IMPORTAÇÃO CSV ---
 
-            const { error } = await supabase.from('ideas').insert(rows);
-            
-            if (error) throw error;
-            setImportStatus({ total: rows.length, success: rows.length });
-            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+    const handleDownloadTemplate = () => {
+        const headers = [
+            "Titulo",
+            "Nicho",
+            "Dor",
+            "Solucao",
+            "Porque",
+            "Modelo Preco",
+            "Publico Alvo",
+            "Estrategia Vendas",
+            "PDR Tecnico",
+            "Tipo Monetizacao (NONE, PAID, DONATION)",
+            "Valor (ex: 99.90)"
+        ];
+        
+        const exampleRow = [
+            "Exemplo de SaaS",
+            "Produtividade",
+            "Empresas perdem tempo com X...",
+            "Um software que automatiza Y...",
+            "Baixo custo de entrada e alta recorrência",
+            "Assinatura Mensal",
+            "Pequenas Empresas",
+            "Ads e Outbound",
+            "React + Node.js",
+            "NONE",
+            "0"
+        ];
 
-        } catch (error: any) {
-            alert('Erro na importação: ' + error.message);
-        } finally {
-            setIsImporting(false);
-            setTimeout(() => setImportStatus(null), 5000);
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n" 
+            + exampleRow.map(field => `"${field}"`).join(",");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "modelo_importacao_ideias.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleImportClick = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
         }
+    };
+
+    const processCSV = (str: string, delimiter = ',') => {
+        const headers = str.slice(0, str.indexOf('\n')).split(delimiter).map(h => h.trim().replace(/[\r"]/g, ''));
+        const rows = str.slice(str.indexOf('\n') + 1).split('\n');
+
+        const arr = rows.map(row => {
+            // Regex complexo para separar por vírgula mas ignorar vírgulas dentro de aspas
+            const values = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(delimiter); 
+            
+            // Fallback simples se o regex falhar ou retornar null em linhas vazias
+            if (!values) return null;
+
+            const el = headers.reduce((object: any, header, index) => {
+                let value = values[index] || '';
+                // Remove aspas extras e espaços
+                value = value.replace(/^"|"$/g, '').trim(); 
+                object[header] = value;
+                return object;
+            }, {});
+            return el;
+        });
+
+        return arr.filter(el => el !== null && Object.values(el).some(v => v !== '')); // Remove linhas vazias
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsImporting(true);
+        const reader = new FileReader();
+
+        reader.onload = async (evt) => {
+            const text = evt.target?.result as string;
+            if (!text) {
+                setIsImporting(false);
+                return;
+            }
+
+            try {
+                const parsedData = processCSV(text);
+                
+                if (parsedData.length === 0) {
+                    alert("O arquivo parece estar vazio ou inválido.");
+                    setIsImporting(false);
+                    return;
+                }
+
+                const rowsToInsert = parsedData.map((row: any) => ({
+                    title: row["Titulo"] || "Sem Título",
+                    niche: row["Nicho"] || "Outros",
+                    pain: row["Dor"] || "",
+                    solution: row["Solucao"] || "",
+                    why: row["Porque"] || "",
+                    pricing_model: row["Modelo Preco"] || "",
+                    target: row["Publico Alvo"] || "",
+                    sales_strategy: row["Estrategia Vendas"] || "",
+                    pdr: row["PDR Tecnico"] || "",
+                    // Mapeamento seguro para ENUM
+                    monetization_type: ["NONE", "PAID", "DONATION"].includes(row["Tipo Monetizacao (NONE, PAID, DONATION)"]) 
+                        ? row["Tipo Monetizacao (NONE, PAID, DONATION)"] 
+                        : "NONE",
+                    price: parseFloat(row["Valor (ex: 99.90)"]) || 0,
+                    payment_type: row["Tipo Monetizacao (NONE, PAID, DONATION)"] === 'PAID' ? 'paid' : row["Tipo Monetizacao (NONE, PAID, DONATION)"] === 'DONATION' ? 'donation' : 'free',
+                    
+                    // Campos padrão
+                    user_id: session.user.id,
+                    votes_count: 0,
+                    is_building: false,
+                    short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
+                    created_at: new Date().toISOString()
+                }));
+
+                const { error } = await supabase.from('ideas').insert(rowsToInsert);
+
+                if (error) throw error;
+
+                setImportStatus({ total: rowsToInsert.length, success: rowsToInsert.length });
+                queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+                alert(`${rowsToInsert.length} projetos importados com sucesso!`);
+
+            } catch (error: any) {
+                console.error(error);
+                alert("Erro ao processar planilha: " + error.message);
+            } finally {
+                setIsImporting(false);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                setTimeout(() => setImportStatus(null), 5000);
+            }
+        };
+
+        reader.readAsText(file);
     };
 
     const isAllSelected = paginatedData.length > 0 && paginatedData.every(i => selectedIds.has(i.id));
@@ -196,14 +302,34 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                             Apagar ({selectedIds.size})
                         </button>
                     )}
+                    
+                    {/* Botões de Importação CSV */}
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileChange} 
+                        className="hidden" 
+                        accept=".csv" 
+                    />
+                    
                     <button 
-                        onClick={handleImportSeed}
-                        disabled={isImporting}
-                        className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+                        onClick={handleDownloadTemplate}
+                        className="px-4 py-2 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+                        title="Baixar modelo CSV"
                     >
-                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                        Importar Seed
+                        <Download className="w-4 h-4" />
+                        Baixar Modelo
                     </button>
+
+                    <button 
+                        onClick={handleImportClick}
+                        disabled={isImporting}
+                        className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+                    >
+                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                        Importar Planilha
+                    </button>
+
                     <button 
                         onClick={() => { setEditingIdea(null); setIsModalOpen(true); }}
                         className="px-4 py-2 bg-zinc-900 hover:bg-black text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2"
@@ -214,9 +340,9 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             </div>
 
             {importStatus && (
-                <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-2">
+                <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                     <CheckCircle className="w-5 h-5" />
-                    <span className="font-bold">Sucesso!</span> {importStatus.success} ideias importadas do arquivo mestre.
+                    <span className="font-bold">Sucesso!</span> {importStatus.success} projetos importados e processados.
                 </div>
             )}
 
