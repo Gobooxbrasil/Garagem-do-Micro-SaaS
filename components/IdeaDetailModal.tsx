@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Idea, Improvement } from '../types';
 import ShareButton from './ShareButton';
 import RequestPixModal from './modals/RequestPixModal';
@@ -49,7 +49,11 @@ import {
   Edit,
   Info,
   Copy,
-  Check
+  Check,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
@@ -192,7 +196,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   refreshData,
   onPromoteIdea
 }) => {
-  const [activeImage, setActiveImage] = useState<string | null>(null);
   const [newImprovement, setNewImprovement] = useState('');
   const [submittingImprovement, setSubmittingImprovement] = useState(false);
   const [pdrCopied, setPdrCopied] = useState(false);
@@ -204,15 +207,28 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const [creatorPixData, setCreatorPixData] = useState<any>(null);
   const [showRequestPixModal, setShowRequestPixModal] = useState(false);
 
+  // Gallery States
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
   if (!idea) return null;
+
+  // Combine showroom image and additional images into one gallery array, filtering out duplicates and empties
+  const galleryImages = React.useMemo(() => {
+      const imgs = [
+          idea.showroom_image,
+          ...(idea.images || [])
+      ].filter(img => img && img.length > 5); // Basic filter for valid strings
+      return Array.from(new Set(imgs)); // Dedup
+  }, [idea]);
+
+  const hasImages = galleryImages.length > 0;
+  const displayImage = galleryImages[0]; // Main cover is first image
 
   const isUnlocked = idea?.user_id === currentUserId || 
                      idea?.idea_transactions?.some(t => t.user_id === currentUserId && t.status === 'confirmed' && t.transaction_type === 'purchase');
 
-  const imageToUse = idea.is_showroom ? idea.showroom_image : (idea.images?.[0]);
-  const displayImage = activeImage || imageToUse;
   const youtubeId = idea.showroom_video_url ? getYoutubeId(idea.showroom_video_url) : null;
-  const hasImages = !!displayImage;
 
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
@@ -312,29 +328,58 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const supporters = idea.idea_transactions?.filter(t => t.transaction_type === 'donation' && t.status === 'confirmed') || [];
   const buyers = idea.idea_transactions?.filter(t => t.transaction_type === 'purchase' && t.status === 'confirmed') || [];
 
+  const openGallery = (index: number = 0) => {
+      setCurrentImageIndex(index);
+      setIsGalleryOpen(true);
+  };
+
+  const nextImage = () => {
+      setCurrentImageIndex((prev) => (prev + 1) % galleryImages.length);
+  };
+
+  const prevImage = () => {
+      setCurrentImageIndex((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/30 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh] border border-gray-200/50 relative overflow-hidden">
         
-        {/* Header */}
-        <div className={`h-48 w-full relative ${hasImages ? 'bg-gray-900' : visuals.bg}`}>
-            {hasImages ? ( <img src={displayImage!} alt="Cover" className="w-full h-full object-cover opacity-80" /> ) : ( <div className="w-full h-full flex items-center justify-center"><VisualIcon className={`w-16 h-16 ${visuals.text} opacity-50`} /></div> )}
-            <button onClick={onClose} className="absolute top-4 right-4 bg-black/90 p-2 rounded-full text-white hover:bg-black transition-colors z-20 shadow-lg border border-white/20"><X className="w-5 h-5" /></button>
-            <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-white to-transparent"></div>
-            <div className="absolute top-4 left-4 flex gap-2">
-                 <span className="bg-white/90 backdrop-blur-md text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm">{idea.niche}</span>
+        {/* Header Cover */}
+        <div 
+            className={`h-48 w-full relative cursor-pointer group/header ${hasImages ? 'bg-gray-900' : visuals.bg}`}
+            onClick={() => hasImages && openGallery(0)}
+        >
+            {hasImages ? ( 
+                <img src={displayImage!} alt="Cover" className="w-full h-full object-cover opacity-90 group-hover/header:opacity-100 transition-opacity" /> 
+            ) : ( 
+                <div className="w-full h-full flex items-center justify-center"><VisualIcon className={`w-16 h-16 ${visuals.text} opacity-50`} /></div> 
+            )}
+            
+            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-4 right-4 bg-black/50 backdrop-blur-md p-2 rounded-full text-white hover:bg-black transition-colors z-20 border border-white/10 hover:scale-105"><X className="w-5 h-5" /></button>
+            
+            {/* Gradient Overlay (Reduzido para ver mais a imagem) */}
+            <div className="absolute bottom-0 left-0 w-full h-20 bg-gradient-to-t from-white via-white/60 to-transparent"></div>
+            
+            {/* Gallery Button */}
+            {hasImages && galleryImages.length > 1 && (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); openGallery(0); }}
+                    className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-white/20 hover:bg-black/80 transition-all flex items-center gap-2 z-20"
+                >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    Ver todas as fotos ({galleryImages.length})
+                </button>
+            )}
+
+            <div className="absolute top-4 left-4 flex gap-2 z-20">
+                 <span className="bg-white/90 backdrop-blur-md text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm border border-gray-200/50">{idea.niche}</span>
                  {idea.short_id && <span className="bg-black/80 backdrop-blur-md text-white text-xs font-mono px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 border border-white/10"><Hash className="w-3 h-3 text-gray-400" />{idea.short_id.toUpperCase()}</span>}
-                 {idea.is_showroom && idea.showroom_objective && (
-                     <span className={`text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 backdrop-blur-md ${idea.showroom_objective === 'feedback' ? 'bg-indigo-500/90 text-white' : 'bg-emerald-500/90 text-white'}`}>
-                         {idea.showroom_objective === 'feedback' ? <Target className="w-3 h-3" /> : <Megaphone className="w-3 h-3" />}
-                         {idea.showroom_objective === 'feedback' ? 'Quero Feedback' : 'Showcase'}
-                     </span>
-                 )}
             </div>
         </div>
 
         {/* Content Body */}
-        <div className="flex-grow overflow-y-auto custom-scrollbar bg-white relative -mt-10 z-10 rounded-t-3xl">
+        <div className="flex-grow overflow-y-auto custom-scrollbar bg-white relative -mt-6 z-10 rounded-t-3xl">
             <div className="p-8 pb-32">
                  <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
                     <div className="flex-grow">
@@ -357,6 +402,26 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                         </button>
                     </div>
                  </div>
+
+                 {/* Gallery Thumbnails Strip (Optional quick view) */}
+                 {galleryImages.length > 1 && (
+                     <div className="flex gap-3 overflow-x-auto pb-4 mb-6 custom-scrollbar">
+                         {galleryImages.map((img, idx) => (
+                             <div 
+                                key={idx} 
+                                onClick={() => openGallery(idx)}
+                                className="h-20 w-28 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity relative"
+                             >
+                                 <img src={img} className="w-full h-full object-cover" />
+                                 {idx === galleryImages.length - 1 && galleryImages.length > 5 && (
+                                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xs">
+                                         +{galleryImages.length - 5}
+                                     </div>
+                                 )}
+                             </div>
+                         ))}
+                     </div>
+                 )}
 
                  {youtubeId && (
                      <div className="mb-10 animate-in fade-in slide-in-from-bottom-4">
@@ -515,6 +580,71 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
             currentUserId={currentUserId!}
             currentUserData={currentUserData}
         />
+
+        {/* LIGHTBOX GALLERY MODAL */}
+        {isGalleryOpen && (
+            <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in">
+                
+                {/* Toolbar */}
+                <div className="flex justify-between items-center p-6 absolute top-0 left-0 right-0 z-20">
+                    <div className="text-white/70 text-sm">
+                        {currentImageIndex + 1} / {galleryImages.length}
+                    </div>
+                    <div className="flex gap-4">
+                        {idea.showroom_link && (
+                            <a href={idea.showroom_link} target="_blank" className="text-white hover:text-blue-400 flex items-center gap-2 text-sm font-bold px-4 py-2 bg-white/10 rounded-full hover:bg-white/20 transition-all">
+                                <ExternalLink className="w-4 h-4" /> Visitar
+                            </a>
+                        )}
+                        <button onClick={() => setIsGalleryOpen(false)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/30 transition-colors">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Main Image */}
+                <div className="flex-grow flex items-center justify-center relative px-4 md:px-16">
+                    {galleryImages.length > 1 && (
+                        <button 
+                            onClick={prevImage}
+                            className="absolute left-4 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                        >
+                            <ChevronLeft className="w-8 h-8" />
+                        </button>
+                    )}
+                    
+                    <img 
+                        src={galleryImages[currentImageIndex]} 
+                        className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-2xl"
+                        alt={`Gallery ${currentImageIndex}`}
+                    />
+
+                    {galleryImages.length > 1 && (
+                        <button 
+                            onClick={nextImage}
+                            className="absolute right-4 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                        >
+                            <ChevronRight className="w-8 h-8" />
+                        </button>
+                    )}
+                </div>
+
+                {/* Thumbnails Strip */}
+                {galleryImages.length > 1 && (
+                    <div className="h-24 p-4 flex justify-center gap-3 overflow-x-auto custom-scrollbar bg-black/50">
+                        {galleryImages.map((img, idx) => (
+                            <button 
+                                key={idx}
+                                onClick={() => setCurrentImageIndex(idx)}
+                                className={`relative h-16 w-24 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${currentImageIndex === idx ? 'border-white opacity-100' : 'border-transparent opacity-50 hover:opacity-80'}`}
+                            >
+                                <img src={img} className="w-full h-full object-cover" />
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        )}
       </div>
     </div>
   );
