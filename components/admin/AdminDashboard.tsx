@@ -1,9 +1,7 @@
 
 import React, { useState } from 'react';
 import { useAdminStats, useAdminLogs } from '../../hooks/use-admin';
-import { Users, Lightbulb, Star, MessageSquare, ArrowUpRight, ArrowDownRight, Clock, Database, Loader2, CheckCircle } from 'lucide-react';
-import { SEED_IDEAS } from '../../lib/seed-ideas';
-import { supabase } from '../../lib/supabaseClient';
+import { Users, Lightbulb, Star, MessageSquare, ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
 
 interface StatCardProps {
     title: string;
@@ -65,41 +63,8 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ log }) => {
 };
 
 const AdminDashboard: React.FC = () => {
-    const { data: stats, refetch: refetchStats } = useAdminStats();
+    const { data: stats } = useAdminStats();
     const { data: logs } = useAdminLogs();
-    const [seeding, setSeeding] = useState(false);
-    const [seedSuccess, setSeedSuccess] = useState(false);
-
-    const handleSeedIdeas = async () => {
-        if (!confirm(`Isso irá criar ${SEED_IDEAS.length} novas ideias vinculadas ao seu usuário atual. Continuar?`)) return;
-        
-        setSeeding(true);
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error("Sem sessão ativa");
-
-            const ideasToInsert = SEED_IDEAS.map(idea => ({
-                ...idea,
-                user_id: session.user.id,
-                votes_count: Math.floor(Math.random() * 20), // Votos iniciais randômicos para parecer vivo
-                is_building: false,
-                short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-                created_at: new Date().toISOString(),
-                payment_type: 'free' // Default
-            }));
-
-            const { error } = await supabase.from('ideas').insert(ideasToInsert);
-            if (error) throw error;
-
-            setSeedSuccess(true);
-            refetchStats();
-            setTimeout(() => setSeedSuccess(false), 5000);
-        } catch (err: any) {
-            alert(`Erro na importação: ${err.message}`);
-        } finally {
-            setSeeding(false);
-        }
-    };
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -149,20 +114,6 @@ const AdminDashboard: React.FC = () => {
 
                 {/* Quick Actions / System Status */}
                 <div className="space-y-6">
-                     <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
-                         <h3 className="font-bold text-zinc-900 mb-4">Ferramentas de Desenvolvimento</h3>
-                         <p className="text-xs text-zinc-500 mb-4">Use com cuidado. Ações em massa no banco de dados.</p>
-                         
-                         <button 
-                            onClick={handleSeedIdeas}
-                            disabled={seeding || seedSuccess}
-                            className={`w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${seedSuccess ? 'bg-green-100 text-green-700' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}
-                         >
-                             {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : seedSuccess ? <CheckCircle className="w-4 h-4" /> : <Database className="w-4 h-4" />}
-                             {seeding ? 'Importando...' : seedSuccess ? 'Sucesso!' : `Importar ${SEED_IDEAS.length} Ideias do PDF`}
-                         </button>
-                     </div>
-
                      <div className="bg-zinc-900 text-white rounded-xl p-6 shadow-lg">
                          <h3 className="font-bold mb-2">Status do Sistema</h3>
                          <div className="space-y-3">

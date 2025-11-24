@@ -1,5 +1,4 @@
 
-
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
 import { CACHE_KEYS } from '../lib/cache-keys';
@@ -9,7 +8,7 @@ import { Idea, Project, Notification, ShowroomFilters } from '../types';
 // --- IDEAS & SHOWROOM ---
 
 export function useIdeas(filters?: ShowroomFilters & { userId?: string, favoriteIds?: string[] }) {
-  return useQuery({
+  return useQuery<Idea[]>({
     queryKey: CACHE_KEYS.ideas.list(filters),
     queryFn: async () => {
       let query = supabase
@@ -82,7 +81,7 @@ export function useIdeas(filters?: ShowroomFilters & { userId?: string, favorite
 export function useIdeaDetail(ideaId: string) {
   const queryClient = useQueryClient();
 
-  return useQuery({
+  return useQuery<Idea>({
     queryKey: CACHE_KEYS.ideas.detail(ideaId),
     queryFn: async () => {
       // 1. Buscar dados principais da View
@@ -147,7 +146,7 @@ export function useIdeaDetail(ideaId: string) {
 // --- USER DATA ---
 
 export function useUserInteractions(userId: string | undefined) {
-    return useQuery({
+    return useQuery<{ votes: Set<string>; favorites: Set<string>; interests: Set<string> }>({
         queryKey: ['user-interactions', userId],
         queryFn: async () => {
             if (!userId) return { votes: new Set<string>(), favorites: new Set<string>(), interests: new Set<string>() };
@@ -171,7 +170,7 @@ export function useUserInteractions(userId: string | undefined) {
 
 // --- LEGACY PROJECTS (Manter para retrocompatibilidade se necessário, mas o Showroom agora usa useIdeas com flag) ---
 export function useProjects() {
-    return useQuery({
+    return useQuery<Project[]>({
         queryKey: CACHE_KEYS.projects.list(),
         queryFn: async () => {
             const { data, error } = await supabase
@@ -188,7 +187,7 @@ export function useProjects() {
 // --- NOTIFICATIONS ---
 
 export function useNotifications(userId: string | undefined) {
-    return useQuery({
+    return useQuery<Notification[]>({
         queryKey: CACHE_KEYS.notifications.unread(userId || ''),
         queryFn: async () => {
             if (!userId) return [];

@@ -242,9 +242,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({ session, onLogout }) => {
                 </div>
             </div>
 
-            {/* RIGHT COLUMN: PIX & QR CODE */}
+            {/* RIGHT COLUMN: PIX & SETUP */}
             <div className="space-y-8">
-                 {/* Novo Componente Refatorado */}
+                 {/* Pix Configuration */}
                  <PixConfiguration userId={session.user.id} />
             </div>
         </div>
