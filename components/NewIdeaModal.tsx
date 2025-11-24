@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Idea } from '../types';
-import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search, FileCode, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info, CheckCircle2 } from 'lucide-react';
+import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search, FileCode, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info, CheckCircle2, Youtube } from 'lucide-react';
 import { PRESET_NICHES } from '../constants';
 
 interface NewIdeaModalProps {
@@ -39,6 +39,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
     target: '',
     sales_strategy: '',
     pdr: '',
+    youtube_video_url: '', // Novo campo
     images: [] as string[],
     
     // Monetization
@@ -63,6 +64,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             target: initialData.target || '',
             sales_strategy: initialData.sales_strategy || '',
             pdr: initialData.pdr || '',
+            youtube_video_url: initialData.youtube_video_url || '',
             images: initialData.images || [],
             monetization_type: (initialData.monetization_type as any) || 'NONE',
             price: initialData.price ? String(initialData.price) : '',
@@ -73,7 +75,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
     } else if (isOpen && !initialData) {
         setFormData({
             title: '', niche: '', pain: '', solution: '', why: '', why_is_private: false,
-            pricing_model: '', target: '', sales_strategy: '', pdr: '', images: [],
+            pricing_model: '', target: '', sales_strategy: '', pdr: '', youtube_video_url: '', images: [],
             monetization_type: 'NONE', price: '', hidden_fields: [], contact_phone: '', contact_email: ''
         });
     }
@@ -260,6 +262,11 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             <div>
               <label className={labelClass}>Estratégia de Vendas</label>
               <textarea required name="sales_strategy" value={formData.sales_strategy} onChange={handleChange} className={`${inputClass} h-20 resize-none`} placeholder="Como você vai conseguir os primeiros 10 clientes?" />
+            </div>
+
+            <div>
+                <label className={labelClass}><Youtube className="w-3.5 h-3.5 mr-1.5 text-red-500" /> Vídeo Apresentação (Opcional)</label>
+                <input type="url" name="youtube_video_url" value={formData.youtube_video_url} onChange={handleChange} className={inputClass} placeholder="Link do vídeo no YouTube (Ex: Pitch da ideia)" />
             </div>
 
             <div>

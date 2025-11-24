@@ -228,7 +228,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const isUnlocked = idea?.user_id === currentUserId || 
                      idea?.idea_transactions?.some(t => t.user_id === currentUserId && t.status === 'confirmed' && t.transaction_type === 'purchase');
 
-  const youtubeId = idea.showroom_video_url ? getYoutubeId(idea.showroom_video_url) : null;
+  const youtubeId = getYoutubeId(idea.youtube_video_url || idea.showroom_video_url);
 
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
@@ -427,7 +427,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                      <div className="mb-10 animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex items-center gap-2 mb-3">
                             <Youtube className="w-5 h-5 text-red-600" />
-                            <h3 className="text-lg font-bold text-gray-900">Demo do Projeto</h3>
+                            <h3 className="text-lg font-bold text-gray-900">Apresentação em Vídeo</h3>
                         </div>
                         <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-lg border border-gray-100">
                              <iframe 

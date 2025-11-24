@@ -23,7 +23,8 @@ import {
   DollarSign,
   Gift,
   Lock,
-  User
+  User,
+  Youtube
 } from 'lucide-react';
 
 interface IdeaCardProps {
@@ -68,6 +69,7 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const hasImage = idea.images && idea.images.length > 0 && idea.images[0] !== '';
   const isOwner = currentUserId && idea.user_id === currentUserId;
   const hasVotes = idea.votes_count > 0;
+  const hasVideo = !!idea.youtube_video_url || !!idea.showroom_video_url;
   
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
@@ -119,11 +121,16 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
         className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-center gap-4"
       >
         {/* Left: Image Thumbnail */}
-        <div className={`w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden border border-gray-100 flex items-center justify-center ${hasImage ? 'bg-gray-50' : visuals.bg}`}>
+        <div className={`w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : visuals.bg}`}>
              {hasImage ? (
                  <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
              ) : (
                  <VisualIcon className={`w-6 h-6 ${visuals.text}`} />
+             )}
+             {hasVideo && (
+                 <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md">
+                     <Youtube className="w-2 h-2" />
+                 </div>
              )}
         </div>
 
@@ -216,6 +223,13 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
                 <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
             </button>
         </div>
+
+        {/* Video Indicator */}
+        {hasVideo && (
+            <div className="absolute bottom-2 right-2 z-20 bg-red-600/90 backdrop-blur-sm text-white p-1 rounded-lg shadow-sm">
+                <Youtube className="w-3 h-3" />
+            </div>
+        )}
       </div>
 
       <div className="p-5 flex flex-col flex-grow">

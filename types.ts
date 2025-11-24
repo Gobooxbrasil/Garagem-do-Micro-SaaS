@@ -68,9 +68,12 @@ export interface Idea {
   showroom_description?: string;
   showroom_link?: string;
   showroom_image?: string; // Capa do projeto
-  showroom_video_url?: string; // Link do Youtube
+  showroom_video_url?: string; // Link do Youtube (Showroom)
   showroom_objective?: 'feedback' | 'showcase'; // Testar ou Divulgar
   showroom_approved_at?: string;
+
+  // New Field for Regular Ideas
+  youtube_video_url?: string;
 
   // Frontend states
   isFavorite?: boolean; 
