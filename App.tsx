@@ -202,23 +202,23 @@ const App: React.FC = () => {
       }
   }, []);
 
-  const ideas = useMemo(() => {
+  const ideas = useMemo<Idea[]>(() => {
      if (!rawIdeas) return [];
      return rawIdeas.map(idea => ({
          ...idea,
-         hasVoted: userInteractions?.votes.has(idea.id),
-         isFavorite: userInteractions?.favorites.has(idea.id),
-         isInterested: userInteractions?.interests.has(idea.id)
+         hasVoted: userInteractions?.votes.has(idea.id) || false,
+         isFavorite: userInteractions?.favorites.has(idea.id) || false,
+         isInterested: userInteractions?.interests.has(idea.id) || false
      }));
   }, [rawIdeas, userInteractions]);
 
-  const hydratedShowroomProjects = useMemo(() => {
+  const hydratedShowroomProjects = useMemo<Idea[]>(() => {
     if (!showroomProjects) return [];
     return showroomProjects.map(p => ({
         ...p,
-        hasVoted: userInteractions?.votes.has(p.id),
-        isFavorite: userInteractions?.favorites.has(p.id),
-        isInterested: userInteractions?.interests.has(p.id)
+        hasVoted: userInteractions?.votes.has(p.id) || false,
+        isFavorite: userInteractions?.favorites.has(p.id) || false,
+        isInterested: userInteractions?.interests.has(p.id) || false
     }));
   }, [showroomProjects, userInteractions]);
 
