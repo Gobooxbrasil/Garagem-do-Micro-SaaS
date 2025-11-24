@@ -1,7 +1,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
-import { AdminStats, UserProfile, AdminLog } from '../types';
+import { AdminStats, UserProfile, AdminLog, Idea } from '../types';
 
 // STATS
 export function useAdminStats() {
@@ -37,7 +37,7 @@ export function useAdminStats() {
   });
 }
 
-// USERS
+// USERS LIST
 export function useAdminUsers(search?: string, filter?: 'all' | 'active' | 'blocked' | 'admin') {
   return useQuery({
     queryKey: ['admin-users', search, filter],
@@ -52,11 +52,43 @@ export function useAdminUsers(search?: string, filter?: 'all' | 'active' | 'bloc
       if (filter === 'active') query = query.eq('is_blocked', false);
       if (filter === 'admin') query = query.eq('is_admin', true);
       
-      const { data, error } = await query.order('created_at', { ascending: false });
+      // Removemos order temporariamente caso cause erro se a coluna não existir, 
+      // mas idealmente: .order('created_at', { ascending: false })
+      const { data, error } = await query;
+      
       if (error) throw error;
-      return data as UserProfile[];
+      
+      // Ordenação manual no client para garantir
+      return (data as UserProfile[]).sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return dateB - dateA;
+      });
     }
   });
+}
+
+// USER DETAILS (DEEP DIVE)
+export function useAdminUserDetails(userId: string | null) {
+    return useQuery({
+        queryKey: ['admin-user-details', userId],
+        queryFn: async () => {
+            if (!userId) return null;
+
+            const [ideas, votes, comments] = await Promise.all([
+                supabase.from('ideas').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+                supabase.from('idea_votes').select('*, ideas(title)').eq('user_id', userId),
+                supabase.from('idea_improvements').select('*, ideas(title)').eq('user_id', userId).order('created_at', { ascending: false })
+            ]);
+
+            return {
+                created_projects: (ideas.data || []) as Idea[],
+                votes_cast: votes.data || [],
+                comments_made: comments.data || []
+            };
+        },
+        enabled: !!userId
+    });
 }
 
 // BLOCK USER
@@ -114,6 +146,32 @@ export function useUnblockUser() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+        }
+    });
+}
+
+// DELETE USER
+export function useDeleteUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ userId, adminId }: { userId: string; adminId: string }) => {
+            // Nota: Isso deleta o perfil público. Para deletar da Auth (Supabase Auth),
+            // seria necessário uma Edge Function com Service Role Key.
+            // Ao deletar o perfil, o usuário perde acesso ao app (pois a maioria das queries depende do perfil).
+            
+            const { error } = await supabase.from('profiles').delete().eq('id', userId);
+            if (error) throw error;
+
+            await supabase.from('admin_logs').insert({
+                admin_id: adminId,
+                action: 'user_deleted',
+                target_type: 'user',
+                target_id: userId
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
         }
     });
 }
