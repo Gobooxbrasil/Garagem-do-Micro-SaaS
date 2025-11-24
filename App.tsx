@@ -59,13 +59,20 @@ const MAIN_DOMAIN = 'garagemdemicrosaas.com.br';
 const App: React.FC = () => {
   const hostname = window.location.hostname;
   const isLandingDomain = hostname === MAIN_DOMAIN || hostname === `www.${MAIN_DOMAIN}`;
+  const isAdminDomain = hostname.startsWith('admin.');
   const isAppMode = !isLandingDomain;
   
   const [session, setSession] = useState<any>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   
-  const [viewState, setViewState] = useState<ViewState>({ type: isAppMode ? 'IDEAS' : 'LANDING' });
+  // Initialize ViewState based on Domain or Path
+  const [viewState, setViewState] = useState<ViewState>(() => {
+    if (isAdminDomain || window.location.pathname.startsWith('/admin')) {
+        return { type: 'ADMIN', subview: 'DASHBOARD' };
+    }
+    return { type: isAppMode ? 'IDEAS' : 'LANDING' };
+  });
   
   const queryClient = useQueryClient();
   const { data: rawIdeas, isLoading: ideasLoading } = useIdeas({ userId: session?.user?.id });
@@ -135,12 +142,17 @@ const App: React.FC = () => {
           if (session?.user) {
               const { data } = await supabase.from('profiles').select('is_admin').eq('id', session.user.id).single();
               setCanAccessAdmin(!!data?.is_admin);
+              
+              // If on admin domain and is admin, ensure we are on admin view
+              if (isAdminDomain && data?.is_admin && viewState.type !== 'ADMIN') {
+                  setViewState({ type: 'ADMIN', subview: 'DASHBOARD' });
+              }
           } else {
               setCanAccessAdmin(false);
           }
       };
       if (session) checkAdmin();
-  }, [session]);
+  }, [session, isAdminDomain]);
 
 
   useEffect(() => {
@@ -149,10 +161,12 @@ const App: React.FC = () => {
           if (!session && protectedTypes.includes(viewState.type)) {
               if (viewState.type !== 'IDEAS' && viewState.type !== 'SHOWROOM') {
                   setViewState({ type: 'IDEAS' });
+                  // If on admin domain but not logged in, we might want to show auth modal
+                  if (isAdminDomain) setIsAuthModalOpen(true);
               }
           }
       }
-  }, [viewState.type, session, isAuthChecking, isAppMode]);
+  }, [viewState.type, session, isAuthChecking, isAppMode, isAdminDomain]);
 
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
@@ -160,10 +174,6 @@ const App: React.FC = () => {
       if (sharedIdeaId) {
           setSelectedIdeaId(sharedIdeaId);
           window.history.replaceState({}, '', window.location.pathname);
-      }
-      // Check for Admin URL
-      if (window.location.pathname.startsWith('/admin')) {
-          setViewState({ type: 'ADMIN', subview: 'DASHBOARD' });
       }
   }, []);
 
@@ -200,7 +210,8 @@ const App: React.FC = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-         if (isAppMode && viewState.type === 'LANDING') {
+         // Only redirect to IDEAS if landing and NOT on admin domain
+         if (isAppMode && viewState.type === 'LANDING' && !isAdminDomain) {
              setViewState({ type: 'IDEAS' });
          }
          fetchUserAvatar(session.user.id);
@@ -212,7 +223,7 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-          if (isAppMode && viewState.type === 'LANDING') setViewState({ type: 'IDEAS' });
+          if (isAppMode && viewState.type === 'LANDING' && !isAdminDomain) setViewState({ type: 'IDEAS' });
           fetchUserAvatar(session.user.id);
       } else {
           if (!isAppMode) setViewState({ type: 'LANDING' });
@@ -221,7 +232,7 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [isAppMode]);
+  }, [isAppMode, isAdminDomain]);
 
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -438,7 +449,7 @@ const App: React.FC = () => {
   }
 
   // PUBLIC LANDING
-  if (!isAppMode && viewState.type === 'LANDING') {
+  if (!isAppMode && viewState.type === 'LANDING' && !isAdminDomain) {
     return (
       <>
         <LandingPage 
