@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useIdeas } from '../../hooks/use-ideas-cache';
-import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet } from 'lucide-react';
+import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import NewIdeaModal from '../NewIdeaModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -144,8 +144,8 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             "Publico Alvo",
             "Estrategia Vendas",
             "PDR Tecnico",
-            "Tipo Monetizacao (NONE, PAID, DONATION)",
-            "Valor (ex: 99.90)"
+            "Tipo Monetizacao",
+            "Valor"
         ];
         
         const exampleRow = [
@@ -162,7 +162,8 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             "0"
         ];
 
-        const csvContent = "data:text/csv;charset=utf-8," 
+        // \uFEFF é o BOM (Byte Order Mark) para o Excel reconhecer UTF-8 corretamente
+        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
             + headers.join(",") + "\n" 
             + exampleRow.map(field => `"${field}"`).join(",");
 
@@ -181,28 +182,66 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         }
     };
 
-    const processCSV = (str: string, delimiter = ',') => {
-        const headers = str.slice(0, str.indexOf('\n')).split(delimiter).map(h => h.trim().replace(/[\r"]/g, ''));
-        const rows = str.slice(str.indexOf('\n') + 1).split('\n');
+    // Parser manual de CSV para evitar erros de Regex e lidar com quotes/delimitadores corretamente
+    const parseCSV = (text: string) => {
+        const lines = text.split(/\r?\n/);
+        if (lines.length === 0) return [];
 
-        const arr = rows.map(row => {
-            // Regex complexo para separar por vírgula mas ignorar vírgulas dentro de aspas
-            const values = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(delimiter); 
+        // Detectar delimitador (vírgula ou ponto e vírgula) baseado na primeira linha
+        const firstLine = lines[0];
+        const semicolonCount = (firstLine.match(/;/g) || []).length;
+        const commaCount = (firstLine.match(/,/g) || []).length;
+        const delimiter = semicolonCount > commaCount ? ';' : ',';
+
+        const parseLine = (line: string) => {
+            const result: string[] = [];
+            let current = '';
+            let inQuotes = false;
             
-            // Fallback simples se o regex falhar ou retornar null em linhas vazias
-            if (!values) return null;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    // Se encontrar aspas duplas dentro de aspas (escaped quote)
+                    if (inQuotes && line[i + 1] === '"') {
+                        current += '"';
+                        i++; // Pula a próxima aspa
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === delimiter && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        };
 
-            const el = headers.reduce((object: any, header, index) => {
-                let value = values[index] || '';
-                // Remove aspas extras e espaços
-                value = value.replace(/^"|"$/g, '').trim(); 
-                object[header] = value;
-                return object;
-            }, {});
-            return el;
-        });
-
-        return arr.filter(el => el !== null && Object.values(el).some(v => v !== '')); // Remove linhas vazias
+        // Headers (remove aspas se houver)
+        const headers = parseLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
+        
+        const data = [];
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue; // Ignora linhas vazias
+            
+            const values = parseLine(lines[i]);
+            const obj: any = {};
+            
+            // Preenche o objeto mapeando header -> value
+            // Se faltar valor, deixa string vazia
+            headers.forEach((h, idx) => {
+                obj[h] = values[idx] || '';
+            });
+            
+            // Filtro simples para evitar objetos vazios criados por linhas de quebra
+            if (Object.values(obj).some(v => v !== '')) {
+                data.push(obj);
+            }
+        }
+        return data;
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -220,7 +259,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             }
 
             try {
-                const parsedData = processCSV(text);
+                const parsedData = parseCSV(text);
                 
                 if (parsedData.length === 0) {
                     alert("O arquivo parece estar vazio ou inválido.");
@@ -228,30 +267,39 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     return;
                 }
 
-                const rowsToInsert = parsedData.map((row: any) => ({
-                    title: row["Titulo"] || "Sem Título",
-                    niche: row["Nicho"] || "Outros",
-                    pain: row["Dor"] || "",
-                    solution: row["Solucao"] || "",
-                    why: row["Porque"] || "",
-                    pricing_model: row["Modelo Preco"] || "",
-                    target: row["Publico Alvo"] || "",
-                    sales_strategy: row["Estrategia Vendas"] || "",
-                    pdr: row["PDR Tecnico"] || "",
-                    // Mapeamento seguro para ENUM
-                    monetization_type: ["NONE", "PAID", "DONATION"].includes(row["Tipo Monetizacao (NONE, PAID, DONATION)"]) 
-                        ? row["Tipo Monetizacao (NONE, PAID, DONATION)"] 
-                        : "NONE",
-                    price: parseFloat(row["Valor (ex: 99.90)"]) || 0,
-                    payment_type: row["Tipo Monetizacao (NONE, PAID, DONATION)"] === 'PAID' ? 'paid' : row["Tipo Monetizacao (NONE, PAID, DONATION)"] === 'DONATION' ? 'donation' : 'free',
-                    
-                    // Campos padrão
-                    user_id: session.user.id,
-                    votes_count: 0,
-                    is_building: false,
-                    short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-                    created_at: new Date().toISOString()
-                }));
+                const rowsToInsert = parsedData.map((row: any) => {
+                    // Função helper para pegar valor ignorando case das chaves (caso o usuário mude header)
+                    const getVal = (keyPart: string) => {
+                        const key = Object.keys(row).find(k => k.toLowerCase().includes(keyPart.toLowerCase()));
+                        return key ? row[key] : "";
+                    };
+
+                    return {
+                        title: getVal("Titulo") || "Sem Título",
+                        niche: getVal("Nicho") || "Outros",
+                        pain: getVal("Dor") || "",
+                        solution: getVal("Solucao") || "",
+                        why: getVal("Porque") || "",
+                        pricing_model: getVal("Modelo Preco") || "",
+                        target: getVal("Publico Alvo") || "",
+                        sales_strategy: getVal("Estrategia") || "",
+                        pdr: getVal("PDR") || "",
+                        
+                        // Monetização e Preço
+                        monetization_type: ["NONE", "PAID", "DONATION"].includes(getVal("Tipo Monetizacao")) 
+                            ? getVal("Tipo Monetizacao") 
+                            : "NONE",
+                        price: parseFloat(getVal("Valor").replace(',', '.')) || 0, // Trata vírgula decimal
+                        payment_type: getVal("Tipo Monetizacao") === 'PAID' ? 'paid' : getVal("Tipo Monetizacao") === 'DONATION' ? 'donation' : 'free',
+                        
+                        // Campos padrão
+                        user_id: session.user.id,
+                        votes_count: 0,
+                        is_building: false,
+                        short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
+                        created_at: new Date().toISOString()
+                    };
+                });
 
                 const { error } = await supabase.from('ideas').insert(rowsToInsert);
 
@@ -263,7 +311,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
             } catch (error: any) {
                 console.error(error);
-                alert("Erro ao processar planilha: " + error.message);
+                alert("Erro ao processar planilha: " + (error.message || "Formato inválido"));
             } finally {
                 setIsImporting(false);
                 if (fileInputRef.current) fileInputRef.current.value = '';
@@ -271,7 +319,12 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             }
         };
 
-        reader.readAsText(file);
+        reader.onerror = () => {
+            alert("Erro ao ler o arquivo.");
+            setIsImporting(false);
+        };
+
+        reader.readAsText(file); // Default UTF-8, browser handles detection mostly
     };
 
     const isAllSelected = paginatedData.length > 0 && paginatedData.every(i => selectedIds.has(i.id));
