@@ -166,6 +166,13 @@ export interface UserProfile {
   pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
   pix_name?: string;
   pix_bank?: string;
+  
+  // Admin Fields
+  is_admin?: boolean;
+  is_blocked?: boolean;
+  blocked_at?: string;
+  blocked_reason?: string;
+  created_at?: string;
 }
 
 // --- ROADMAP & FEEDBACK TYPES ---
@@ -213,13 +220,16 @@ export interface NPSResponse {
   created_at?: string;
 }
 
+export type AdminSubview = 'DASHBOARD' | 'USERS' | 'IDEAS' | 'SHOWROOM' | 'NPS' | 'FEEDBACK' | 'LOGS' | 'SETTINGS';
+
 export type ViewState = 
   | { type: 'LANDING' }
   | { type: 'IDEAS' }
   | { type: 'SHOWROOM' }
   | { type: 'ROADMAP' }
-  | { type: 'PROJECT_DETAIL'; projectId: string } // Mantendo projectId para compatibilidade, mas apontará para Idea ID
-  | { type: 'PROFILE' };
+  | { type: 'PROJECT_DETAIL'; projectId: string } 
+  | { type: 'PROFILE' }
+  | { type: 'ADMIN'; subview: AdminSubview };
 
 // SHOWROOM SPECIFIC TYPES
 export interface ShowroomFilters {
@@ -228,5 +238,36 @@ export interface ShowroomFilters {
   showFavorites?: boolean;
   myProjects?: boolean;
   sortBy?: 'recent' | 'votes';
-  onlyShowroom?: boolean; // Se true, filtra is_showroom=true
+  onlyShowroom?: boolean; 
+}
+
+// --- ADMIN TYPES ---
+
+export interface AdminStats {
+  total_users: number;
+  blocked_users: number;
+  total_ideas: number;
+  total_showroom: number;
+  total_roadmap: number;
+  total_nps: number;
+  avg_nps_score: number;
+  total_feedback: number;
+  total_votes: number;
+  new_users_week: number;
+  new_ideas_week: number;
+}
+
+export interface AdminLog {
+  id: string;
+  admin_id: string;
+  action: string;
+  target_type?: string;
+  target_id?: string;
+  details?: any;
+  ip_address?: string;
+  created_at: string;
+  profiles?: {
+    full_name: string;
+    avatar_url: string;
+  };
 }
