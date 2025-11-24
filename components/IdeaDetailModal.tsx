@@ -41,7 +41,12 @@ import {
   Hash,
   Star,
   Reply,
-  EyeOff
+  EyeOff,
+  Target,
+  Megaphone,
+  ExternalLink,
+  Youtube,
+  Edit
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
@@ -55,6 +60,7 @@ interface IdeaDetailModalProps {
   onJoinTeam?: (ideaId: string) => Promise<void>; 
   onAddImprovement?: (ideaId: string, content: string, parentId?: string) => Promise<void>;
   refreshData: () => void;
+  onPromoteIdea?: (idea: Idea) => void;
 }
 
 const getNicheVisuals = (niche: string) => {
@@ -77,6 +83,13 @@ const getNicheVisuals = (niche: string) => {
     if (n.includes('turism') || n.includes('viage')) return { icon: Plane, bg: 'bg-blue-50', text: 'text-blue-500' };
     return { icon: Lightbulb, bg: 'bg-gray-100', text: 'text-gray-500' };
 }
+
+const getYoutubeId = (url: string | undefined) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+};
 
 const CommentThread: React.FC<{ 
     comment: Improvement, 
@@ -160,7 +173,8 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   onRequestPdr,
   onJoinTeam,
   onAddImprovement,
-  refreshData
+  refreshData,
+  onPromoteIdea
 }) => {
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [newImprovement, setNewImprovement] = useState('');
@@ -170,17 +184,19 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchaseType, setPurchaseType] = useState<'donation' | 'purchase'>('donation');
   const [donationAmount, setDonationAmount] = useState<number>(0);
-  const [creatorPixData, setCreatorPixData] = useState<any>(null); // Dados do PIX do criador
+  const [creatorPixData, setCreatorPixData] = useState<any>(null);
   const [showRequestPixModal, setShowRequestPixModal] = useState(false);
+
+  if (!idea) return null;
 
   const isUnlocked = idea?.user_id === currentUserId || 
                      idea?.idea_transactions?.some(t => t.user_id === currentUserId && t.status === 'confirmed' && t.transaction_type === 'purchase');
 
-  if (!idea) return null;
+  const imageToUse = idea.is_showroom ? idea.showroom_image : (idea.images?.[0]);
+  const displayImage = activeImage || imageToUse;
+  const youtubeId = idea.showroom_video_url ? getYoutubeId(idea.showroom_video_url) : null;
+  const hasImages = !!displayImage;
 
-  const images = idea.images || [];
-  const hasImages = images.length > 0 && images[0] !== '';
-  const displayImage = activeImage || (hasImages ? images[0] : null);
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
   const isOwner = currentUserId && idea.user_id === currentUserId;
@@ -228,7 +244,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const handleInitiatePayment = async (type: 'donation' | 'purchase') => {
       if (!idea.user_id) return;
       
-      // Se for doação, pede o valor antes (prompt simples por enquanto, melhor seria um modal intermediário)
       let amount = 0;
       if (type === 'donation') {
           const val = prompt("Qual valor você deseja doar? (Ex: 10.00)");
@@ -243,7 +258,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
           amount = idea.price || 0;
       }
 
-      // Buscar PIX do criador
       const { data: creatorProfile } = await supabase.from('profiles').select('*').eq('id', idea.user_id).single();
       
       if (!creatorProfile || !creatorProfile.pix_key) {
@@ -284,7 +298,13 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
             <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-white to-transparent"></div>
             <div className="absolute top-4 left-4 flex gap-2">
                  <span className="bg-white/90 backdrop-blur-md text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm">{idea.niche}</span>
-                 <span className="bg-black/80 backdrop-blur-md text-white text-xs font-mono px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 border border-white/10"><Hash className="w-3 h-3 text-gray-400" />{idea.short_id ? idea.short_id.toUpperCase() : 'NO-CODE'}</span>
+                 {idea.short_id && <span className="bg-black/80 backdrop-blur-md text-white text-xs font-mono px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 border border-white/10"><Hash className="w-3 h-3 text-gray-400" />{idea.short_id.toUpperCase()}</span>}
+                 {idea.is_showroom && idea.showroom_objective && (
+                     <span className={`text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 backdrop-blur-md ${idea.showroom_objective === 'feedback' ? 'bg-indigo-500/90 text-white' : 'bg-emerald-500/90 text-white'}`}>
+                         {idea.showroom_objective === 'feedback' ? <Target className="w-3 h-3" /> : <Megaphone className="w-3 h-3" />}
+                         {idea.showroom_objective === 'feedback' ? 'Quero Feedback' : 'Showcase'}
+                     </span>
+                 )}
             </div>
         </div>
 
@@ -313,24 +333,80 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                     </div>
                  </div>
 
+                 {youtubeId && (
+                     <div className="mb-10 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Youtube className="w-5 h-5 text-red-600" />
+                            <h3 className="text-lg font-bold text-gray-900">Demo do Projeto</h3>
+                        </div>
+                        <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-lg border border-gray-100">
+                             <iframe 
+                                width="100%" 
+                                height="100%" 
+                                src={`https://www.youtube.com/embed/${youtubeId}`} 
+                                title="YouTube video player" 
+                                frameBorder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                allowFullScreen
+                             ></iframe>
+                        </div>
+                     </div>
+                 )}
+
                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                      <div className="lg:col-span-2 space-y-12">
+                         
                          <div className="space-y-8">
-                             <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4" /> O Problema</h3>{isHidden('pain') ? renderLockedContent('A Dor') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.pain}</p>)}</div>
-                             <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> A Solução</h3>{isHidden('solution') ? renderLockedContent('A Solução') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.solution}</p>)}</div>
+                             {idea.is_showroom && idea.showroom_description && (
+                                 <div>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Rocket className="w-4 h-4" /> Sobre o Projeto</h3>
+                                    <p className="text-lg text-gray-800 leading-relaxed font-light whitespace-pre-wrap">{idea.showroom_description}</p>
+                                 </div>
+                             )}
+
+                             {!idea.is_showroom && (
+                                 <>
+                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4" /> O Problema</h3>{isHidden('pain') ? renderLockedContent('A Dor') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.pain}</p>)}</div>
+                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> A Solução</h3>{isHidden('solution') ? renderLockedContent('A Solução') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.solution}</p>)}</div>
+                                 </>
+                             )}
                          </div>
-                         <div><h3 className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileCode className="w-4 h-4" /> Tech Specs (PDR)</h3>{isHidden('pdr') ? renderLockedContent('o PDR Completo') : (<div className="bg-slate-900 text-slate-300 p-6 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap border border-slate-800 shadow-inner relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>{idea.pdr || "// Nenhum detalhe técnico fornecido."}</div>)}</div>
+
+                         {!idea.is_showroom && (
+                             <div><h3 className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileCode className="w-4 h-4" /> Tech Specs (PDR)</h3>{isHidden('pdr') ? renderLockedContent('o PDR Completo') : (<div className="bg-slate-900 text-slate-300 p-6 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap border border-slate-800 shadow-inner relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>{idea.pdr || "// Nenhum detalhe técnico fornecido."}</div>)}</div>
+                         )}
 
                          <div className="pt-8 border-t border-gray-100">
-                             <h3 className="text-lg font-bold text-apple-text mb-6 flex items-center gap-2"><MessageSquarePlus className="w-5 h-5 text-gray-400" /> Discussão e Melhorias ({idea.idea_improvements?.length || 0})</h3>
-                             <div className="space-y-2 mb-8">{commentThreads.length === 0 && (<div className="text-gray-400 text-sm italic bg-gray-50 p-6 rounded-xl text-center border border-dashed border-gray-200">Nenhuma sugestão ainda. Seja o primeiro a colaborar!</div>)}{commentThreads.map((thread) => ( <CommentThread key={thread.id} comment={thread} depth={0} onReply={handleReply} currentUserId={currentUserId} /> ))}</div>
-                             <form onSubmit={submitImprovement} className="flex gap-3 items-start bg-gray-50 p-4 rounded-2xl border border-gray-200"><div className="flex-grow relative"><textarea required value={newImprovement} onChange={(e) => setNewImprovement(e.target.value)} placeholder="Sugira uma feature ou deixe seu feedback..." className="w-full bg-white border border-gray-200 rounded-xl p-3 text-sm focus:border-apple-blue outline-none transition-all resize-none h-24"></textarea></div><button type="submit" disabled={submittingImprovement || !newImprovement.trim()} className="bg-black hover:bg-gray-800 text-white p-3 rounded-xl shadow-lg shadow-black/10 transition-all disabled:opacity-50">{submittingImprovement ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5"/>}</button></form>
+                             <h3 className="text-lg font-bold text-apple-text mb-6 flex items-center gap-2"><MessageSquarePlus className="w-5 h-5 text-gray-400" /> {idea.is_showroom ? 'Feedback & Comentários' : 'Dúvidas & Sugestões'} ({idea.idea_improvements?.length || 0})</h3>
+                             <div className="space-y-2 mb-8">{commentThreads.length === 0 && (<div className="text-gray-400 text-sm italic bg-gray-50 p-6 rounded-xl text-center border border-dashed border-gray-200">Nenhum comentário ainda. Seja o primeiro a colaborar!</div>)}{commentThreads.map((thread) => ( <CommentThread key={thread.id} comment={thread} depth={0} onReply={handleReply} currentUserId={currentUserId} /> ))}</div>
+                             <form onSubmit={submitImprovement} className="flex gap-3 items-start bg-gray-50 p-4 rounded-2xl border border-gray-200"><div className="flex-grow relative"><textarea required value={newImprovement} onChange={(e) => setNewImprovement(e.target.value)} placeholder={idea.is_showroom ? "Deixe seu feedback para o criador..." : "Sugira uma feature ou deixe seu feedback..."} className="w-full bg-white border border-gray-200 rounded-xl p-3 text-sm focus:border-apple-blue outline-none transition-all resize-none h-24"></textarea></div><button type="submit" disabled={submittingImprovement || !newImprovement.trim()} className="bg-black hover:bg-gray-800 text-white p-3 rounded-xl shadow-lg shadow-black/10 transition-all disabled:opacity-50">{submittingImprovement ? <Loader2 className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5"/>}</button></form>
                          </div>
                      </div>
 
                      <div className="space-y-8">
                          <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 space-y-4 shadow-sm">
+                             {idea.showroom_link && (
+                                 <a 
+                                    href={idea.showroom_link} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    className="w-full bg-apple-blue hover:bg-apple-blueHover text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all"
+                                 >
+                                     <ExternalLink className="w-4 h-4" /> Acessar Projeto
+                                 </a>
+                             )}
+                            
+                             {isOwner && onPromoteIdea && (
+                                <button 
+                                    onClick={() => onPromoteIdea(idea)}
+                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 transition-all"
+                                >
+                                    <Edit className="w-4 h-4" /> {idea.is_showroom ? 'Editar Detalhes' : 'Promover para Showroom'}
+                                </button>
+                             )}
+
                              <button onClick={() => onToggleFavorite(idea.id)} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 border transition-all ${idea.isFavorite ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-600' : ''}`} /> {idea.isFavorite ? 'Favoritado' : 'Favoritar Projeto'}</button>
+                             
                              {!isOwner && idea.payment_type === 'donation' && ( <button onClick={() => handleInitiatePayment('donation')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"><Gift className="w-4 h-4" /> Quero Doar</button> )}
                              {!isOwner && idea.payment_type === 'paid' && !isUnlocked && ( <button onClick={() => handleInitiatePayment('purchase')} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-500/20 transition-all flex items-center justify-center gap-2"><Lock className="w-4 h-4" /> Comprar Acesso (R$ {idea.price})</button> )}
                              
@@ -346,7 +422,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Modelo de Receita</label><p className="font-semibold text-gray-800 flex items-center gap-2 mt-1"><DollarSign className="w-4 h-4 text-green-600" /> {idea.pricing_model}</p></div>
                              <div>
                                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Diferencial</label>
-                                 {/* CORREÇÃO: Usando why_is_private para lógica de exibição */}
                                  {idea.why_is_private && !isOwner ? (
                                      <p className="text-sm text-gray-400 italic mt-1 flex items-center gap-1 bg-gray-50 p-2 rounded-lg border border-gray-100"><EyeOff className="w-3 h-3"/> Oculto pelo criador</p>
                                  ) : (
@@ -359,7 +434,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
             </div>
         </div>
         
-        {/* MODAL DE COMPRA / DOAÇÃO */}
         {showPurchaseModal && creatorPixData && currentUserId && (
              <PurchaseModal 
                 isOpen={showPurchaseModal}

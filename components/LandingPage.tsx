@@ -8,7 +8,8 @@ import {
   Rocket, 
   ShieldCheck, 
   BarChart3,
-  CheckCircle
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -28,7 +29,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn 
             <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center shadow-lg">
               <Layers className="text-white w-5 h-5" strokeWidth={2} />
             </div>
-            <span className="text-lg font-bold tracking-tight">Garagem</span>
+            <div className="flex flex-col justify-center">
+                <span className="text-lg font-bold tracking-tight leading-none">Garagem</span>
+                <span className="text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-100 px-1.5 rounded self-start mt-0.5">
+                    VERSÃO ALPHA
+                </span>
+            </div>
           </div>
           <div className="flex items-center gap-4">
              {!isLoggedIn && (
@@ -190,12 +196,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn 
       {/* Footer */}
       <footer className="bg-gray-50 border-t border-gray-200 py-12">
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2">
-                <Layers className="w-6 h-6 text-black" />
-                <span className="font-bold text-lg">Garagem</span>
+            <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                    <Layers className="w-6 h-6 text-black" />
+                    <span className="font-bold text-lg">Garagem</span>
+                </div>
+                 <div className="flex items-center gap-2 text-gray-500 mt-2">
+                    <AlertTriangle className="w-4 h-4 text-orange-500" />
+                    <span className="text-xs font-medium">Sistema em fase Alpha (v0.1.0)</span>
+                </div>
             </div>
-            <div className="text-sm text-gray-500">
-                © 2023 Garagem de Micro SaaS. Feito por Builders.
+            <div className="text-sm text-gray-500 text-center md:text-right">
+                <p>© 2023 Garagem de Micro SaaS. Feito por Builders.</p>
+                <p className="text-xs text-gray-400 mt-1">Funcionalidades em teste. Use com moderação.</p>
             </div>
             <div className="flex gap-6">
                 <a href="#" className="text-gray-400 hover:text-black transition-colors"><ShieldCheck className="w-5 h-5" /></a>

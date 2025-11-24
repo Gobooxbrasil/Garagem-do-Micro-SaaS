@@ -1,3 +1,4 @@
+
 export const CACHE_KEYS = {
   ideas: {
     all: ['ideas'] as const,
@@ -29,5 +30,14 @@ export const CACHE_KEYS = {
   favorites: {
      all: ['favorites'] as const,
      byUser: (userId: string) => [...CACHE_KEYS.favorites.all, userId] as const
+  },
+  feedback: {
+    all: ['feedbacks'] as const,
+    list: (filters?: any) => [...CACHE_KEYS.feedback.all, 'list', filters] as const,
+    detail: (id: string) => [...CACHE_KEYS.feedback.all, 'detail', id] as const,
+    comments: (id: string) => [...CACHE_KEYS.feedback.all, 'comments', id] as const,
+  },
+  nps: {
+    status: (userId: string) => ['nps', 'status', userId] as const,
   }
 };

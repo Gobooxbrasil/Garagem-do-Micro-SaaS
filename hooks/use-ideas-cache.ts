@@ -3,43 +3,71 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
 import { CACHE_KEYS } from '../lib/cache-keys';
 import { CACHE_STRATEGIES } from '../lib/cache-config';
-import { Idea, Project, Notification, Improvement, Transaction } from '../types';
+import { Idea, Project, Notification, ShowroomFilters } from '../types';
 
-// --- IDEAS ---
+// --- IDEAS & SHOWROOM ---
 
-export function useIdeas(filters?: { category?: string; search?: string; userId?: string }) {
+export function useIdeas(filters?: ShowroomFilters & { userId?: string, favoriteIds?: string[] }) {
   return useQuery({
     queryKey: CACHE_KEYS.ideas.list(filters),
     queryFn: async () => {
-      // USAR VIEW MATERIALIZADA/CACHEADA
       let query = supabase
         .from('cached_ideas_with_stats')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
 
+      // Filtro de Showroom (Se true, traz apenas showroom. Se false/undefined, traz apenas ideias normais)
+      if (filters?.onlyShowroom) {
+          query = query.eq('is_showroom', true);
+      } else {
+          // Na aba de ideias, não queremos ver o que já virou projeto de showroom? 
+          // Ou queremos ver tudo? Por padrão, vamos mostrar apenas ideias que NÃO são showroom na aba Ideias
+          query = query.eq('is_showroom', false);
+      }
+
+      // Filtro por Categoria
       if (filters?.category && filters.category !== 'Todos') {
         query = query.eq('niche', filters.category);
       }
       
+      // Busca (Search)
       if (filters?.search) {
-        query = query.ilike('title', `%${filters.search}%`);
+        if (filters.onlyShowroom) {
+             query = query.or(`title.ilike.%${filters.search}%,showroom_description.ilike.%${filters.search}%`);
+        } else {
+             query = query.or(`title.ilike.%${filters.search}%,pain.ilike.%${filters.search}%,solution.ilike.%${filters.search}%`);
+        }
       }
-      if (filters?.userId) {
+
+      // Meus Projetos
+      if (filters?.myProjects && filters.userId) {
           query = query.eq('user_id', filters.userId);
+      }
+
+      // Favoritos (A query .in é limitada, mas funciona bem para listas de favoritos < 1000)
+      if (filters?.showFavorites && filters.favoriteIds && filters.favoriteIds.length > 0) {
+          query = query.in('id', filters.favoriteIds);
+      } else if (filters?.showFavorites && (!filters.favoriteIds || filters.favoriteIds.length === 0)) {
+          // Se quer favoritos mas a lista está vazia, retorna nada
+          return [];
+      }
+
+      // Ordenação
+      if (filters?.sortBy === 'votes') {
+          query = query.order('votes_count', { ascending: false });
+      } else {
+          // Default: Recent
+          query = query.order('created_at', { ascending: false });
       }
 
       const { data, error } = await query;
       if (error) throw error;
       
-      // Mapeamento para garantir compatibilidade com componentes que esperam arrays
       return (data as any[]).map(i => ({
           ...i,
-          // Arrays vazios para listagem (não precisamos carregar tudo na lista)
           idea_interested: [],
           idea_improvements: [],
           idea_transactions: [],
           payment_type: i.payment_type || 'free',
-          // Fallback para manter compatibilidade com código legado que busca em profiles
           profiles: {
             full_name: i.creator_name || 'Anônimo',
             avatar_url: i.creator_avatar
@@ -63,7 +91,7 @@ export function useIdeaDetail(ideaId: string) {
         .eq('id', ideaId)
         .single();
 
-      // 2. Buscar relações separadamente (já que views nem sempre suportam deep joins automáticos)
+      // 2. Buscar relações separadamente
       const improvementsQuery = supabase
         .from('idea_improvements')
         .select('*, profiles(full_name, avatar_url)')
@@ -80,7 +108,6 @@ export function useIdeaDetail(ideaId: string) {
         .select('*, profiles(full_name, avatar_url)')
         .eq('idea_id', ideaId);
 
-      // Executar em paralelo
       const [ideaRes, improvementsRes, interestedRes, transactionsRes] = await Promise.all([
           ideaQuery,
           improvementsQuery,
@@ -104,22 +131,23 @@ export function useIdeaDetail(ideaId: string) {
           }
       } as Idea;
     },
-    // Usa dados da lista como placeholder enquanto carrega
     initialData: () => {
-      const allIdeas = queryClient.getQueryData<Idea[]>(CACHE_KEYS.ideas.list({}));
+      // Tenta achar em cache de listagem geral (ideias ou showroom)
+      const allIdeas = queryClient.getQueryData<Idea[]>(CACHE_KEYS.ideas.list({})) 
+        || queryClient.getQueryData<Idea[]>(CACHE_KEYS.ideas.list({ onlyShowroom: true }));
       return allIdeas?.find((idea) => idea.id === ideaId);
     },
     ...CACHE_STRATEGIES.DYNAMIC,
   });
 }
 
-// --- USER DATA (VOTES, FAVS, ETC) ---
+// --- USER DATA ---
 
 export function useUserInteractions(userId: string | undefined) {
     return useQuery({
         queryKey: ['user-interactions', userId],
         queryFn: async () => {
-            if (!userId) return { votes: new Set(), favorites: new Set(), interests: new Set() };
+            if (!userId) return { votes: new Set<string>(), favorites: new Set<string>(), interests: new Set<string>() };
             
             const [votes, favs, interests] = await Promise.all([
                 supabase.from('idea_votes').select('idea_id').eq('user_id', userId),
@@ -138,8 +166,7 @@ export function useUserInteractions(userId: string | undefined) {
     });
 }
 
-// --- PROJECTS ---
-
+// --- LEGACY PROJECTS (Manter para retrocompatibilidade se necessário, mas o Showroom agora usa useIdeas com flag) ---
 export function useProjects() {
     return useQuery({
         queryKey: CACHE_KEYS.projects.list(),
@@ -171,7 +198,7 @@ export function useNotifications(userId: string | undefined) {
             return data as Notification[];
         },
         enabled: !!userId,
-        refetchInterval: 30000, // Polling 30s
+        refetchInterval: 30000,
         ...CACHE_STRATEGIES.REALTIME
     });
 }
