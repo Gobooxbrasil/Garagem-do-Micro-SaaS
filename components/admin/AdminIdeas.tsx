@@ -2,9 +2,10 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useIdeas } from '../../hooks/use-ideas-cache';
-import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet, AlertCircle, HelpCircle } from 'lucide-react';
+import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet, AlertCircle, HelpCircle, Pencil } from 'lucide-react';
 import NewIdeaModal from '../NewIdeaModal';
 import { CsvImportModal } from './CsvImportModal';
+import { BulkEditModal } from './BulkEditModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
 import { CACHE_KEYS } from '../../lib/cache-keys';
@@ -21,6 +22,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     // States de Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
     const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
 
     // States de Paginação e Seleção
@@ -75,15 +77,14 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             setIsDeleting(id);
             try {
                 // 1. Excluir relações manualmente (Manual Cascade)
-                // Isso previne erro de Foreign Key Constraint se o banco não estiver configurado com Cascade
                 await Promise.all([
                     supabase.from('idea_votes').delete().eq('idea_id', id),
                     supabase.from('idea_interested').delete().eq('idea_id', id),
                     supabase.from('idea_improvements').delete().eq('idea_id', id),
                     supabase.from('idea_transactions').delete().eq('idea_id', id),
                     supabase.from('favorites').delete().eq('idea_id', id),
-                    supabase.from('reviews').delete().eq('project_id', id), // Caso seja um projeto legado
-                    supabase.from('notifications').delete().match({ 'payload->idea_id': id }) // Tentativa de limpar notificações relacionadas
+                    supabase.from('reviews').delete().eq('project_id', id), 
+                    supabase.from('notifications').delete().match({ 'payload->idea_id': id })
                 ]);
 
                 // 2. Excluir a ideia principal
@@ -99,7 +100,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 });
             } catch (error: any) {
                 console.error("Erro ao excluir:", error);
-                alert('Erro ao excluir o projeto. Verifique se existem dependências manuais ou tente novamente.\n\nDetalhe: ' + error.message);
+                alert('Erro ao excluir o projeto: ' + error.message);
             } finally {
                 setIsDeleting(null);
             }
@@ -114,7 +115,6 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         if (confirm(`Tem certeza que deseja excluir ${count} ideias selecionadas? Essa ação não pode ser desfeita.`)) {
             setIsBulkDeleting(true);
             try {
-                // 1. Excluir relações em lote
                 await Promise.all([
                     supabase.from('idea_votes').delete().in('idea_id', ids),
                     supabase.from('idea_interested').delete().in('idea_id', ids),
@@ -124,7 +124,6 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     supabase.from('reviews').delete().in('project_id', ids)
                 ]);
 
-                // 2. Excluir as ideias
                 const { error } = await supabase
                     .from('ideas')
                     .delete()
@@ -142,6 +141,22 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 setIsBulkDeleting(false);
             }
         }
+    };
+
+    const handleBulkUpdate = async (updates: any) => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+
+        const { error } = await supabase
+            .from('ideas')
+            .update(updates)
+            .in('id', ids);
+
+        if (error) throw error;
+
+        queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+        setSelectedIds(new Set());
+        alert('Itens atualizados com sucesso!');
     };
 
     const handleSave = async (ideaData: any) => {
@@ -164,38 +179,9 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     };
 
     const handleDownloadTemplate = () => {
-        const headers = [
-            "Titulo",
-            "Nicho",
-            "Dor",
-            "Solucao",
-            "Porque",
-            "Modelo Preco",
-            "Publico Alvo",
-            "Estrategia Vendas",
-            "PDR Tecnico",
-            "Tipo Monetizacao",
-            "Valor"
-        ];
-        
-        const exampleRow = [
-            "Exemplo de SaaS",
-            "Produtividade",
-            "Empresas perdem tempo com X...",
-            "Um software que automatiza Y...",
-            "Baixo custo de entrada e alta recorrência",
-            "Assinatura Mensal",
-            "Pequenas Empresas",
-            "Ads e Outbound",
-            "React + Node.js",
-            "NONE",
-            "0"
-        ];
-
-        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
-            + headers.join(",") + "\n" 
-            + exampleRow.map(field => `"${field}"`).join(",");
-
+        const headers = ["Titulo", "Nicho", "Dor", "Solucao", "Porque", "Modelo Preco", "Publico Alvo", "Estrategia Vendas", "PDR Tecnico", "Tipo Monetizacao", "Valor"];
+        const exampleRow = ["Exemplo de SaaS", "Produtividade", "Empresas perdem tempo...", "Um software que...", "Baixo custo...", "Assinatura Mensal", "Pequenas Empresas", "Ads", "React", "NONE", "0"];
+        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + exampleRow.map(field => `"${field}"`).join(",");
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -224,14 +210,22 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     {selectedIds.size > 0 && (
-                        <button 
-                            onClick={handleBulkDelete}
-                            disabled={isBulkDeleting}
-                            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
-                        >
-                            {isBulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            Apagar ({selectedIds.size})
-                        </button>
+                        <>
+                            <button 
+                                onClick={() => setIsBulkEditModalOpen(true)}
+                                className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
+                            >
+                                <Pencil className="w-4 h-4" /> Editar ({selectedIds.size})
+                            </button>
+                            <button 
+                                onClick={handleBulkDelete}
+                                disabled={isBulkDeleting}
+                                className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
+                            >
+                                {isBulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                Apagar ({selectedIds.size})
+                            </button>
+                        </>
                     )}
                     
                     <button 
@@ -381,6 +375,13 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     alert('Importação concluída com sucesso!');
                 }}
                 userId={session.user.id}
+            />
+
+            <BulkEditModal 
+                isOpen={isBulkEditModalOpen}
+                onClose={() => setIsBulkEditModalOpen(false)}
+                selectedCount={selectedIds.size}
+                onSave={handleBulkUpdate}
             />
         </div>
     );
