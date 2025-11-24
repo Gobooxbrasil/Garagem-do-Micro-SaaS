@@ -11,7 +11,7 @@ import AuthModal from './components/AuthModal';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import LandingPage from './components/LandingPage';
 import ProfileView from './components/ProfileView'; 
-import { useIdeas, useUserInteractions, useNotifications } from './hooks/use-ideas-cache';
+import { useIdeas, useUserInteractions, useNotifications, useIdeaDetail } from './hooks/use-ideas-cache';
 import { useVoteIdea, useToggleFavorite, useAddImprovement, useJoinInterest } from './hooks/use-mutations';
 import { useFeedbackList, useUserFeedbackVotes } from './hooks/use-feedback';
 import { usePrefetch } from './hooks/use-prefetch';
@@ -58,8 +58,12 @@ const MAIN_DOMAIN = 'garagemdemicrosaas.com.br';
 const App: React.FC = () => {
   // Lógica de Domínio
   const hostname = window.location.hostname;
-  // Considera "App Mode" se for o subdomínio 'app.' OU localhost (para desenvolvimento)
-  const isAppMode = hostname.startsWith('app.') || hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  
+  // CORREÇÃO: A lógica anterior era muito restritiva. 
+  // Agora, consideramos "App Mode" QUALQUER coisa que não seja explicitamente a Landing Page.
+  // Isso garante que localhost, vercel previews, e o subdomínio app funcionem.
+  const isLandingDomain = hostname === MAIN_DOMAIN || hostname === `www.${MAIN_DOMAIN}`;
+  const isAppMode = !isLandingDomain;
   
   const [session, setSession] = useState<any>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
@@ -133,6 +137,10 @@ const App: React.FC = () => {
   const [showMostVotedOnly, setShowMostVotedOnly] = useState(false); 
   const [showMyIdeasOnly, setShowMyIdeasOnly] = useState(false);
 
+  // DATA FETCHING FOR SELECTED IDEA (RESTORED FUNCTIONALITY)
+  // We need to fetch full details (comments, supporters) when a card is clicked
+  const { data: fullIdeaData } = useIdeaDetail(selectedIdeaId || '');
+
   useEffect(() => {
       // Se estiver no modo App, forçamos a verificação de auth para rotas protegidas
       if (isAppMode && !isAuthChecking) {
@@ -176,12 +184,15 @@ const App: React.FC = () => {
     }));
   }, [showroomProjects, userInteractions]);
 
-  const selectedIdea = useMemo(() => {
+  const selectedIdeaListVersion = useMemo(() => {
      const foundInIdeas = ideas.find(i => i.id === selectedIdeaId);
      if(foundInIdeas) return foundInIdeas;
      const foundInShowroom = hydratedShowroomProjects.find(i => i.id === selectedIdeaId);
      return foundInShowroom || null;
   }, [ideas, hydratedShowroomProjects, selectedIdeaId]);
+
+  // Use full data if loaded, otherwise fallback to list data for instant open
+  const activeIdea = fullIdeaData || selectedIdeaListVersion;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -459,14 +470,16 @@ const App: React.FC = () => {
              className="flex items-center gap-3 cursor-pointer group"
              onClick={() => setViewState({ type: 'IDEAS' })}
           >
-            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-              <Layers className="text-white w-4 h-4" strokeWidth={2} />
+            <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+              <Layers className="text-white w-6 h-6" strokeWidth={1.5} />
             </div>
-            <div className="flex flex-col justify-center">
-                <span className="text-sm font-bold tracking-tight leading-none text-gray-900">
+            <div className="flex items-center gap-2">
+                <span className="text-xl font-bold tracking-tight text-gray-900">
                     Garagem
                 </span>
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Alpha</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-[0.2em] mt-1">
+                    DE MICRO SAAS
+                </span>
             </div>
           </div>
 
@@ -950,7 +963,7 @@ const App: React.FC = () => {
       />
 
       <IdeaDetailModal
-        idea={selectedIdea}
+        idea={activeIdea}
         currentUserId={session?.user?.id}
         currentUserData={{ 
             name: session?.user?.user_metadata?.full_name || 'Usuário',

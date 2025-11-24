@@ -26,13 +26,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn 
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-200/50">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center shadow-lg">
-              <Layers className="text-white w-5 h-5" strokeWidth={2} />
+            <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center shadow-lg">
+              <Layers className="text-white w-6 h-6" strokeWidth={1.5} />
             </div>
-            <div className="flex flex-col justify-center">
-                <span className="text-lg font-bold tracking-tight leading-none">Garagem</span>
-                <span className="text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-100 px-1.5 rounded self-start mt-0.5">
-                    VERSÃO ALPHA
+            <div className="flex items-center gap-2">
+                <span className="text-xl font-bold tracking-tight text-gray-900">
+                    Garagem
+                </span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-[0.2em] mt-1">
+                    DE MICRO SAAS
                 </span>
             </div>
           </div>
