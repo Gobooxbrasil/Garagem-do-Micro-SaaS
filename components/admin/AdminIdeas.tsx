@@ -7,6 +7,7 @@ import NewIdeaModal from '../NewIdeaModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
 import { CACHE_KEYS } from '../../lib/cache-keys';
+import Papa from 'papaparse';
 
 interface AdminIdeasProps {
     session: any;
@@ -131,7 +132,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
     };
 
-    // --- LÓGICA DE IMPORTAÇÃO CSV (Parser Robusto) ---
+    // --- LÓGICA DE IMPORTAÇÃO CSV ---
 
     const handleDownloadTemplate = () => {
         const headers = [
@@ -182,197 +183,99 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         }
     };
 
-    // State Machine CSV Parser (RFC 4180 Compliantish)
-    // Lida com: Aspas duplas, quebras de linha dentro de campos, delimitadores variados (auto-detect)
-    const parseCSV = (text: string) => {
-        let cursor = 0;
-        
-        // 1. Handle BOM (Byte Order Mark) se existir
-        if (text.charCodeAt(0) === 0xFEFF) {
-            cursor++;
-        }
-
-        const rows: string[][] = [];
-        let row: string[] = [];
-        let currentVal = '';
-        let insideQuote = false;
-
-        // Auto-detect delimiter (semicolon or comma) based on first line
-        const firstLineEnd = text.indexOf('\n');
-        const firstLine = firstLineEnd > -1 ? text.substring(cursor, firstLineEnd) : text.substring(cursor);
-        const semicolonCount = (firstLine.match(/;/g) || []).length;
-        const commaCount = (firstLine.match(/,/g) || []).length;
-        const delimiter = semicolonCount > commaCount ? ';' : ',';
-
-        while (cursor < text.length) {
-            const char = text[cursor];
-            const nextChar = text[cursor + 1];
-
-            if (insideQuote) {
-                if (char === '"') {
-                    if (nextChar === '"') {
-                        // Escaped quote ("") inside a quoted field -> becomes a single "
-                        currentVal += '"';
-                        cursor++; // Skip the next quote
-                    } else {
-                        // End of quoted field
-                        insideQuote = false;
-                    }
-                } else {
-                    currentVal += char;
-                }
-            } else {
-                if (char === '"') {
-                    insideQuote = true;
-                } else if (char === delimiter) {
-                    // End of field
-                    row.push(currentVal.trim());
-                    currentVal = '';
-                } else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
-                    // End of row
-                    row.push(currentVal.trim());
-                    rows.push(row);
-                    row = [];
-                    currentVal = '';
-                    if (char === '\r') cursor++; // Skip \n if we are at \r
-                } else if (char === '\r') {
-                    // Carriage return without newline (rare, but possible in old macs)
-                    row.push(currentVal.trim());
-                    rows.push(row);
-                    row = [];
-                    currentVal = '';
-                } else {
-                    currentVal += char;
-                }
-            }
-            cursor++;
-        }
-
-        // Push last field/row if exists
-        if (currentVal || row.length > 0) {
-            row.push(currentVal.trim());
-            rows.push(row);
-        }
-
-        // 2. Process Rows to Objects
-        if (rows.length === 0) return [];
-
-        // Remove empty trailing rows
-        const cleanRows = rows.filter(r => r.length > 0 && r.some(c => c !== ''));
-        
-        if (cleanRows.length === 0) return [];
-
-        const headers = cleanRows[0].map(h => h.trim().toLowerCase().replace(/['"]/g, '')); // Normalize headers
-        const dataObjects = [];
-
-        for (let i = 1; i < cleanRows.length; i++) {
-            const rowValues = cleanRows[i];
-            // Skip if row doesn't match header length significantly (bad parsing check) or is empty
-            if (rowValues.length < 2) continue; 
-
-            const obj: any = {};
-            headers.forEach((header, index) => {
-                const val = rowValues[index] || '';
-                obj[header] = val;
-            });
-            dataObjects.push(obj);
-        }
-
-        return dataObjects;
-    };
-
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setIsImporting(true);
-        const reader = new FileReader();
 
-        reader.onload = async (evt) => {
-            const text = evt.target?.result as string;
-            if (!text) {
-                setIsImporting(false);
-                return;
-            }
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            encoding: 'UTF-8',
+            complete: async (results) => {
+                try {
+                    const rows = results.data;
+                    
+                    if (rows.length === 0) {
+                        alert("O arquivo parece estar vazio ou o formato não foi reconhecido.");
+                        setIsImporting(false);
+                        return;
+                    }
 
-            try {
-                const parsedData = parseCSV(text);
-                
-                if (parsedData.length === 0) {
-                    alert("O arquivo parece estar vazio ou o formato não foi reconhecido.");
+                    // Helper to normalize keys: remove accents, lowercase, remove special chars
+                    const normalizeKey = (key: string) => key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+                    const rowsToInsert = rows.map((row: any) => {
+                        // Find value by fuzzy key matching
+                        const getValue = (searchKeys: string[]) => {
+                            const foundKey = Object.keys(row).find(k => {
+                                const normalizedK = normalizeKey(k);
+                                return searchKeys.some(sk => normalizedK.includes(sk));
+                            });
+                            return foundKey ? row[foundKey]?.toString().trim() : "";
+                        };
+
+                        const monTypeRaw = getValue(['tipomonetizacao', 'monetizacao', 'tipo']).toUpperCase();
+                        const monetization_type = ["PAID", "DONATION"].includes(monTypeRaw) ? monTypeRaw : "NONE";
+                        const payment_type = monetization_type === 'PAID' ? 'paid' : monetization_type === 'DONATION' ? 'donation' : 'free';
+                        
+                        const priceRaw = getValue(['valor', 'price', 'custo']);
+                        // Remove currency symbols, handle comma/dot
+                        const priceClean = priceRaw.replace(/[^0-9.,]/g, '').replace(',', '.');
+                        const price = parseFloat(priceClean) || 0;
+
+                        return {
+                            title: getValue(['titulo', 'title', 'nome']) || "Sem Título",
+                            niche: getValue(['nicho', 'categoria', 'niche']) || "Outros",
+                            pain: getValue(['dor', 'problema', 'pain']) || "",
+                            solution: getValue(['solucao', 'solucao', 'solution', 'produto']) || "",
+                            why: getValue(['porque', 'why', 'motivo']) || "",
+                            pricing_model: getValue(['modelopreco', 'precificacao', 'pricing']) || "",
+                            target: getValue(['publico', 'alvo', 'target']) || "",
+                            sales_strategy: getValue(['estrategia', 'vendas', 'sales']) || "",
+                            pdr: getValue(['pdr', 'tecnico', 'stack']) || "",
+                            
+                            monetization_type,
+                            payment_type,
+                            price,
+                            
+                            // Campos padrão
+                            user_id: session.user.id,
+                            votes_count: 0,
+                            is_building: false,
+                            short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
+                            created_at: new Date().toISOString()
+                        };
+                    });
+
+                    // Insert in batches of 50
+                    const batchSize = 50;
+                    for (let i = 0; i < rowsToInsert.length; i += batchSize) {
+                        const batch = rowsToInsert.slice(i, i + batchSize);
+                        const { error } = await supabase.from('ideas').insert(batch);
+                        if (error) throw error;
+                    }
+
+                    setImportStatus({ total: rowsToInsert.length, success: rowsToInsert.length });
+                    queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+                    alert(`${rowsToInsert.length} projetos importados com sucesso!`);
+
+                } catch (error: any) {
+                    console.error(error);
+                    alert("Erro ao processar planilha: " + (error.message || "Erro desconhecido"));
+                } finally {
                     setIsImporting(false);
-                    return;
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                    setTimeout(() => setImportStatus(null), 5000);
                 }
-
-                console.log("Parsed Data Preview:", parsedData.slice(0, 2));
-
-                // Flexible Mapper
-                const rowsToInsert = parsedData.map((row: any) => {
-                    // Helper to find key fuzzily
-                    const findVal = (keywords: string[]) => {
-                        const key = Object.keys(row).find(k => keywords.some(kw => k.includes(kw)));
-                        return key ? row[key] : "";
-                    };
-
-                    return {
-                        title: findVal(['titulo', 'title', 'nome']) || "Sem Título",
-                        niche: findVal(['nicho', 'categoria', 'niche']) || "Outros",
-                        pain: findVal(['dor', 'problema', 'pain']) || "",
-                        solution: findVal(['solucao', 'solução', 'solution']) || "",
-                        why: findVal(['porque', 'why', 'motivo']) || "",
-                        pricing_model: findVal(['preco', 'preço', 'pricing', 'modelo']) || "",
-                        target: findVal(['publico', 'público', 'target', 'alvo']) || "",
-                        sales_strategy: findVal(['estrategia', 'estratégia', 'sales']) || "",
-                        pdr: findVal(['pdr', 'tecnico', 'técnico', 'stack']) || "",
-                        
-                        // Monetização e Preço
-                        monetization_type: ["NONE", "PAID", "DONATION"].includes(findVal(['tipo mon', 'monetizacao'])) 
-                            ? findVal(['tipo mon', 'monetizacao']) 
-                            : "NONE",
-                        
-                        price: parseFloat(findVal(['valor', 'price', 'custo'])?.replace(',', '.') || '0') || 0,
-                        
-                        payment_type: findVal(['tipo mon', 'monetizacao']) === 'PAID' ? 'paid' : 
-                                      findVal(['tipo mon', 'monetizacao']) === 'DONATION' ? 'donation' : 'free',
-                        
-                        // Campos padrão
-                        user_id: session.user.id,
-                        votes_count: 0,
-                        is_building: false,
-                        short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-                        created_at: new Date().toISOString()
-                    };
-                });
-
-                // Insert in batches of 50 to avoid payload limits
-                const batchSize = 50;
-                for (let i = 0; i < rowsToInsert.length; i += batchSize) {
-                    const batch = rowsToInsert.slice(i, i + batchSize);
-                    const { error } = await supabase.from('ideas').insert(batch);
-                    if (error) throw error;
-                }
-
-                setImportStatus({ total: rowsToInsert.length, success: rowsToInsert.length });
-                queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
-                alert(`${rowsToInsert.length} projetos importados com sucesso!`);
-
-            } catch (error: any) {
+            },
+            error: (error) => {
                 console.error(error);
-                alert("Erro ao processar planilha: " + (error.message || "Formato inválido"));
-            } finally {
+                alert("Erro ao ler o arquivo CSV: " + error.message);
                 setIsImporting(false);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-                setTimeout(() => setImportStatus(null), 5000);
             }
-        };
-
-        reader.onerror = () => {
-            alert("Erro ao ler o arquivo.");
-            setIsImporting(false);
-        };
-
-        // Force UTF-8 reading
-        reader.readAsText(file, "UTF-8");
+        });
     };
 
     const isAllSelected = paginatedData.length > 0 && paginatedData.every(i => selectedIds.has(i.id));
@@ -430,7 +333,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
                         Importar Planilha
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-black text-white text-[10px] rounded text-center z-50">
-                            Suporta CSV com campos multi-linha (Excel/Google Sheets)
+                            Suporta CSV com campos multi-linha e aspas (Excel)
                         </div>
                     </button>
 
