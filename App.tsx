@@ -936,7 +936,7 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center text-center gap-2">
             <div className="flex items-center gap-2 text-gray-400">
                 <AlertTriangle className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">Sistema v1.0.2</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Sistema v1.0.3</span>
             </div>
             <p className="text-[10px] text-gray-500 max-w-md leading-relaxed">
                 A Garagem está em fase inicial de desenvolvimento. Funcionalidades podem mudar e bugs podem ocorrer. 
