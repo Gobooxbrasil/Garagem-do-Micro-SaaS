@@ -28,6 +28,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     const [itemsPerPage, setItemsPerPage] = useState(20);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
     // Lógica de Paginação
     const paginatedData = useMemo(() => {
@@ -71,33 +72,71 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
     const handleDelete = async (id: string) => {
         if (confirm('Tem certeza que deseja excluir esta ideia permanentemente?')) {
-            await supabase.from('ideas').delete().eq('id', id);
-            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
+            setIsDeleting(id);
+            try {
+                // 1. Excluir relações manualmente (Manual Cascade)
+                // Isso previne erro de Foreign Key Constraint se o banco não estiver configurado com Cascade
+                await Promise.all([
+                    supabase.from('idea_votes').delete().eq('idea_id', id),
+                    supabase.from('idea_interested').delete().eq('idea_id', id),
+                    supabase.from('idea_improvements').delete().eq('idea_id', id),
+                    supabase.from('idea_transactions').delete().eq('idea_id', id),
+                    supabase.from('favorites').delete().eq('idea_id', id),
+                    supabase.from('reviews').delete().eq('project_id', id), // Caso seja um projeto legado
+                    supabase.from('notifications').delete().match({ 'payload->idea_id': id }) // Tentativa de limpar notificações relacionadas
+                ]);
+
+                // 2. Excluir a ideia principal
+                const { error } = await supabase.from('ideas').delete().eq('id', id);
+                
+                if (error) throw error;
+
+                queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+                setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+            } catch (error: any) {
+                console.error("Erro ao excluir:", error);
+                alert('Erro ao excluir o projeto. Verifique se existem dependências manuais ou tente novamente.\n\nDetalhe: ' + error.message);
+            } finally {
+                setIsDeleting(null);
+            }
         }
     };
 
     const handleBulkDelete = async () => {
         const count = selectedIds.size;
         if (count === 0) return;
+        const ids = Array.from(selectedIds);
 
         if (confirm(`Tem certeza que deseja excluir ${count} ideias selecionadas? Essa ação não pode ser desfeita.`)) {
             setIsBulkDeleting(true);
             try {
+                // 1. Excluir relações em lote
+                await Promise.all([
+                    supabase.from('idea_votes').delete().in('idea_id', ids),
+                    supabase.from('idea_interested').delete().in('idea_id', ids),
+                    supabase.from('idea_improvements').delete().in('idea_id', ids),
+                    supabase.from('idea_transactions').delete().in('idea_id', ids),
+                    supabase.from('favorites').delete().in('idea_id', ids),
+                    supabase.from('reviews').delete().in('project_id', ids)
+                ]);
+
+                // 2. Excluir as ideias
                 const { error } = await supabase
                     .from('ideas')
                     .delete()
-                    .in('id', Array.from(selectedIds));
+                    .in('id', ids);
 
                 if (error) throw error;
 
                 queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
                 setSelectedIds(new Set());
+                alert(`${count} itens excluídos com sucesso.`);
             } catch (error: any) {
+                console.error("Erro bulk delete:", error);
                 alert('Erro ao excluir itens: ' + error.message);
             } finally {
                 setIsBulkDeleting(false);
@@ -268,7 +307,13 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button onClick={() => handleEdit(idea)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
-                                                <button onClick={() => handleDelete(idea.id)} className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                                <button 
+                                                    onClick={() => handleDelete(idea.id)} 
+                                                    disabled={isDeleting === idea.id}
+                                                    className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                >
+                                                    {isDeleting === idea.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4"/>}
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
