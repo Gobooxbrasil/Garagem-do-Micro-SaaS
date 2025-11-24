@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Idea } from '../types';
 import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search, FileCode, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info } from 'lucide-react';
@@ -398,7 +397,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             <div>
               <div className="flex justify-between items-end mb-1.5">
                 <label className={labelClass + " mb-0"}>
-                    A Dor (Problema) 
+                    A Dor Específica (O Problema) 
                     <InfoTooltip text="Qual dor ou dificuldade os clientes enfrentam no dia a dia que este produto vai resolver?" />
                 </label>
                 {renderVisibilityToggle('pain')}
@@ -409,7 +408,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             <div>
               <div className="flex justify-between items-end mb-1.5">
                 <label className={labelClass + " mb-0"}>
-                    A Solução
+                    A Solução (O Produto)
                     <InfoTooltip text="Como este produto elimina o problema dos clientes de forma simples e eficaz?" />
                 </label>
                 {renderVisibilityToggle('solution')}
@@ -442,8 +441,8 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             <div>
                <div className="flex justify-between items-center">
                    <label className={labelClass}>
-                       Diferencial (Why)
-                       <InfoTooltip text="Por que os clientes devem escolher este produto e não a concorrência? O que o torna único?" />
+                       Por que é um bom Micro SaaS?
+                       <InfoTooltip text="Por que o churn é baixo? Por que o MVP é simples? Por que o valor é percebido rápido?" />
                    </label>
                    
                    <label className="flex items-center gap-2 cursor-pointer mb-1.5">

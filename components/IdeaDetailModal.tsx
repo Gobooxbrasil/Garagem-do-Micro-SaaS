@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Idea, Improvement } from '../types';
 import ShareButton from './ShareButton';
@@ -366,8 +365,8 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
 
                              {!idea.is_showroom && (
                                  <>
-                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4" /> O Problema</h3>{isHidden('pain') ? renderLockedContent('A Dor') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.pain}</p>)}</div>
-                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> A Solução</h3>{isHidden('solution') ? renderLockedContent('A Solução') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.solution}</p>)}</div>
+                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4" /> A Dor Específica (O Problema)</h3>{isHidden('pain') ? renderLockedContent('A Dor') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.pain}</p>)}</div>
+                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> A Solução (O Produto)</h3>{isHidden('solution') ? renderLockedContent('A Solução') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.solution}</p>)}</div>
                                  </>
                              )}
                          </div>
@@ -421,7 +420,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                          <div className="border-t border-gray-100 pt-6 space-y-4">
                              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Modelo de Receita</label><p className="font-semibold text-gray-800 flex items-center gap-2 mt-1"><DollarSign className="w-4 h-4 text-green-600" /> {idea.pricing_model}</p></div>
                              <div>
-                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Diferencial</label>
+                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Por que é um bom Micro SaaS?</label>
                                  {idea.why_is_private && !isOwner ? (
                                      <p className="text-sm text-gray-400 italic mt-1 flex items-center gap-1 bg-gray-50 p-2 rounded-lg border border-gray-100"><EyeOff className="w-3 h-3"/> Oculto pelo criador</p>
                                  ) : (

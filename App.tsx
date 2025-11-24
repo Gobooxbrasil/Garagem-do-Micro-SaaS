@@ -620,7 +620,7 @@ const App: React.FC = () => {
         {viewState.type === 'IDEAS' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex flex-col md:flex-row justify-between items-end mb-10 pb-6 border-b border-gray-100">
-                    <div><h1 className="text-4xl font-bold text-apple-text tracking-tight mb-2">Explorar Ideias</h1><p className="text-gray-500 text-lg font-light">Descubra oportunidades validadas pela comunidade.</p></div>
+                    <div><h1 className="text-4xl font-bold text-apple-text tracking-tight mb-2">Explorar Ideias</h1><p className="text-gray-500 text-lg font-light">Descubra oportunidades para criar e ganhar dinheiro com seu Micro SaaS.</p></div>
                     <button onClick={() => { if (requireAuth()) setIsIdeaModalOpen(true); }} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"><Lightbulb className="w-5 h-5 text-yellow-400 fill-yellow-400" /> Nova Ideia</button>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
