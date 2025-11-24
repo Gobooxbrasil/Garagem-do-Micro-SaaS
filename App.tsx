@@ -229,6 +229,9 @@ const App: React.FC = () => {
     // Check immediately on mount and whenever view state changes (navigation)
     if (session) {
         checkSecurityStatus();
+        // Poll every 15 seconds to enforce bans quickly
+        const interval = setInterval(checkSecurityStatus, 15000);
+        return () => clearInterval(interval);
     }
   }, [session, viewState.type, isAdminDomain]);
 

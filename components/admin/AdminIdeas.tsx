@@ -182,62 +182,78 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         }
     };
 
-    // Parser manual de CSV para evitar erros de Regex e lidar com quotes/delimitadores corretamente
+    // Parser manual de CSV robusto (State Machine) para lidar com multiline e quotes complexos
     const parseCSV = (text: string) => {
-        const lines = text.split(/\r?\n/);
-        if (lines.length === 0) return [];
+        // Remove BOM se existir
+        if (text.charCodeAt(0) === 0xFEFF) {
+            text = text.slice(1);
+        }
 
-        // Detectar delimitador (vírgula ou ponto e vírgula) baseado na primeira linha
-        const firstLine = lines[0];
-        const semicolonCount = (firstLine.match(/;/g) || []).length;
-        const commaCount = (firstLine.match(/,/g) || []).length;
+        const arr: string[][] = [];
+        let quote = false;
+        let row = 0;
+        let col = 0;
+        let c = 0;
+        const len = text.length;
+        
+        arr[row] = [];
+        arr[row][col] = "";
+
+        // Heurística simples para detecção de delimitador
+        const sample = text.slice(0, 1000);
+        const semicolonCount = (sample.match(/;/g) || []).length;
+        const commaCount = (sample.match(/,/g) || []).length;
         const delimiter = semicolonCount > commaCount ? ';' : ',';
 
-        const parseLine = (line: string) => {
-            const result: string[] = [];
-            let current = '';
-            let inQuotes = false;
-            
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                
-                if (char === '"') {
-                    // Se encontrar aspas duplas dentro de aspas (escaped quote)
-                    if (inQuotes && line[i + 1] === '"') {
-                        current += '"';
-                        i++; // Pula a próxima aspa
-                    } else {
-                        inQuotes = !inQuotes;
-                    }
-                } else if (char === delimiter && !inQuotes) {
-                    result.push(current.trim());
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            result.push(current.trim());
-            return result;
-        };
+        while (c < len) {
+            let cc = text[c];
+            let nc = text[c + 1];
 
-        // Headers (remove aspas se houver)
-        const headers = parseLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
-        
+            if (cc === '"') {
+                if (quote && nc === '"') {
+                    arr[row][col] += '"'; 
+                    c++; 
+                } else {
+                    quote = !quote; 
+                }
+            } else if (cc === delimiter && !quote) {
+                col++;
+                arr[row][col] = "";
+            } else if ((cc === '\r' || cc === '\n') && !quote) {
+                if (cc === '\r' && nc === '\n') c++;
+                row++;
+                arr[row] = [];
+                col = 0;
+                arr[row][col] = "";
+            } else {
+                arr[row][col] += cc;
+            }
+            c++;
+        }
+
+        // Remove última linha se vazia
+        if (arr.length > 0 && (arr[arr.length - 1].length === 0 || (arr[arr.length - 1].length === 1 && arr[arr.length - 1][0] === ""))) {
+            arr.pop();
+        }
+
+        if (arr.length === 0) return [];
+
+        const headers = arr[0].map(h => h.trim());
         const data = [];
-        for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue; // Ignora linhas vazias
-            
-            const values = parseLine(lines[i]);
+        
+        for (let i = 1; i < arr.length; i++) {
+            const rowData = arr[i];
             const obj: any = {};
+            let hasValue = false;
             
-            // Preenche o objeto mapeando header -> value
-            // Se faltar valor, deixa string vazia
             headers.forEach((h, idx) => {
-                obj[h] = values[idx] || '';
+                const val = rowData[idx] || '';
+                obj[h] = val;
+                if (val) hasValue = true;
             });
             
-            // Filtro simples para evitar objetos vazios criados por linhas de quebra
-            if (Object.values(obj).some(v => v !== '')) {
+            // Filter empty objects
+            if (Object.values(obj).some(v => typeof v === 'string' && v.trim() !== '')) {
                 data.push(obj);
             }
         }
