@@ -4,10 +4,10 @@ import { supabase } from '../../lib/supabaseClient';
 import { useIdeas } from '../../hooks/use-ideas-cache';
 import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet, AlertCircle, HelpCircle } from 'lucide-react';
 import NewIdeaModal from '../NewIdeaModal';
+import { CsvImportModal } from './CsvImportModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
 import { CACHE_KEYS } from '../../lib/cache-keys';
-import Papa from 'papaparse';
 
 interface AdminIdeasProps {
     session: any;
@@ -17,13 +17,11 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     const [search, setSearch] = useState('');
     const { data: ideas, isLoading } = useIdeas({ search });
     const queryClient = useQueryClient();
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // States de Modal e Importação
+    // States de Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
-    const [isImporting, setIsImporting] = useState(false);
-    const [importStatus, setImportStatus] = useState<{total: number, success: number} | null>(null);
 
     // States de Paginação e Seleção
     const [currentPage, setCurrentPage] = useState(1);
@@ -40,20 +38,16 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
     const totalPages = ideas ? Math.ceil(ideas.length / itemsPerPage) : 0;
 
-    // Resetar página ao pesquisar
     React.useEffect(() => {
         setCurrentPage(1);
     }, [search]);
 
-    // Handlers de Seleção
     const handleSelectAll = () => {
         if (paginatedData.every(idea => selectedIds.has(idea.id))) {
-            // Desmarcar todos da página atual
             const newSelected = new Set(selectedIds);
             paginatedData.forEach(idea => newSelected.delete(idea.id));
             setSelectedIds(newSelected);
         } else {
-            // Marcar todos da página atual
             const newSelected = new Set(selectedIds);
             paginatedData.forEach(idea => newSelected.add(idea.id));
             setSelectedIds(newSelected);
@@ -113,11 +107,9 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
     const handleSave = async (ideaData: any) => {
         if (ideaData.id) {
-            // Update
             const { error } = await supabase.from('ideas').update(ideaData).eq('id', ideaData.id);
             if (error) alert('Erro ao atualizar: ' + error.message);
         } else {
-            // Create
             const { error } = await supabase.from('ideas').insert({
                 ...ideaData,
                 user_id: session.user.id,
@@ -131,8 +123,6 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         setEditingIdea(null);
         queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
     };
-
-    // --- LÓGICA DE IMPORTAÇÃO CSV ---
 
     const handleDownloadTemplate = () => {
         const headers = [
@@ -176,108 +166,6 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         document.body.removeChild(link);
     };
 
-    const handleImportClick = () => {
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ''; // Reset value
-            fileInputRef.current.click();
-        }
-    };
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsImporting(true);
-
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            encoding: 'UTF-8',
-            complete: async (results) => {
-                try {
-                    const rows = results.data;
-                    
-                    if (rows.length === 0) {
-                        alert("O arquivo parece estar vazio ou o formato não foi reconhecido.");
-                        setIsImporting(false);
-                        return;
-                    }
-
-                    // Helper to normalize keys: remove accents, lowercase, remove special chars
-                    const normalizeKey = (key: string) => key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-
-                    const rowsToInsert = rows.map((row: any) => {
-                        // Find value by fuzzy key matching
-                        const getValue = (searchKeys: string[]) => {
-                            const foundKey = Object.keys(row).find(k => {
-                                const normalizedK = normalizeKey(k);
-                                return searchKeys.some(sk => normalizedK.includes(sk));
-                            });
-                            return foundKey ? row[foundKey]?.toString().trim() : "";
-                        };
-
-                        const monTypeRaw = getValue(['tipomonetizacao', 'monetizacao', 'tipo']).toUpperCase();
-                        const monetization_type = ["PAID", "DONATION"].includes(monTypeRaw) ? monTypeRaw : "NONE";
-                        const payment_type = monetization_type === 'PAID' ? 'paid' : monetization_type === 'DONATION' ? 'donation' : 'free';
-                        
-                        const priceRaw = getValue(['valor', 'price', 'custo']);
-                        // Remove currency symbols, handle comma/dot
-                        const priceClean = priceRaw.replace(/[^0-9.,]/g, '').replace(',', '.');
-                        const price = parseFloat(priceClean) || 0;
-
-                        return {
-                            title: getValue(['titulo', 'title', 'nome']) || "Sem Título",
-                            niche: getValue(['nicho', 'categoria', 'niche']) || "Outros",
-                            pain: getValue(['dor', 'problema', 'pain']) || "",
-                            solution: getValue(['solucao', 'solucao', 'solution', 'produto']) || "",
-                            why: getValue(['porque', 'why', 'motivo']) || "",
-                            pricing_model: getValue(['modelopreco', 'precificacao', 'pricing']) || "",
-                            target: getValue(['publico', 'alvo', 'target']) || "",
-                            sales_strategy: getValue(['estrategia', 'vendas', 'sales']) || "",
-                            pdr: getValue(['pdr', 'tecnico', 'stack']) || "",
-                            
-                            monetization_type,
-                            payment_type,
-                            price,
-                            
-                            // Campos padrão
-                            user_id: session.user.id,
-                            votes_count: 0,
-                            is_building: false,
-                            short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
-                            created_at: new Date().toISOString()
-                        };
-                    });
-
-                    // Insert in batches of 50
-                    const batchSize = 50;
-                    for (let i = 0; i < rowsToInsert.length; i += batchSize) {
-                        const batch = rowsToInsert.slice(i, i + batchSize);
-                        const { error } = await supabase.from('ideas').insert(batch);
-                        if (error) throw error;
-                    }
-
-                    setImportStatus({ total: rowsToInsert.length, success: rowsToInsert.length });
-                    queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
-                    alert(`${rowsToInsert.length} projetos importados com sucesso!`);
-
-                } catch (error: any) {
-                    console.error(error);
-                    alert("Erro ao processar planilha: " + (error.message || "Erro desconhecido"));
-                } finally {
-                    setIsImporting(false);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                    setTimeout(() => setImportStatus(null), 5000);
-                }
-            },
-            error: (error) => {
-                console.error(error);
-                alert("Erro ao ler o arquivo CSV: " + error.message);
-                setIsImporting(false);
-            }
-        });
-    };
-
     const isAllSelected = paginatedData.length > 0 && paginatedData.every(i => selectedIds.has(i.id));
 
     return (
@@ -307,15 +195,6 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         </button>
                     )}
                     
-                    {/* Botões de Importação CSV */}
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleFileChange} 
-                        className="hidden" 
-                        accept=".csv,.txt" 
-                    />
-                    
                     <button 
                         onClick={handleDownloadTemplate}
                         className="px-4 py-2 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
@@ -326,15 +205,11 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     </button>
 
                     <button 
-                        onClick={handleImportClick}
-                        disabled={isImporting}
-                        className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 relative group"
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                     >
-                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                        <FileSpreadsheet className="w-4 h-4" />
                         Importar Planilha
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-black text-white text-[10px] rounded text-center z-50">
-                            Suporta CSV com campos multi-linha e aspas (Excel)
-                        </div>
                     </button>
 
                     <button 
@@ -345,13 +220,6 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     </button>
                 </div>
             </div>
-
-            {importStatus && (
-                <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                    <CheckCircle className="w-5 h-5" />
-                    <span className="font-bold">Sucesso!</span> {importStatus.success} projetos importados e processados.
-                </div>
-            )}
 
             {/* Table */}
             <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
@@ -458,6 +326,16 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 onClose={() => setIsModalOpen(false)} 
                 onSave={handleSave}
                 initialData={editingIdea}
+            />
+
+            <CsvImportModal 
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+                    alert('Importação concluída com sucesso!');
+                }}
+                userId={session.user.id}
             />
         </div>
     );
