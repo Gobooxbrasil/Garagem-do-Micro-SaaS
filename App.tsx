@@ -198,6 +198,40 @@ const App: React.FC = () => {
       }
   }, [viewState.type, session, isAuthChecking, isAdminDomain]);
 
+  // SECURITY CHECK EFFECT (BLOCK/DELETE ENFORCEMENT)
+  useEffect(() => {
+    const checkSecurityStatus = async () => {
+        if (session?.user) {
+            const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('is_blocked, blocked_reason')
+                .eq('id', session.user.id)
+                .single();
+
+            // Se perfil não existe (foi deletado) ou is_blocked é true
+            if ((error && error.code === 'PGRST116') || profile?.is_blocked) {
+                await supabase.auth.signOut();
+                setSession(null);
+                setUserAvatar(null);
+                
+                if (profile?.is_blocked) {
+                    alert(`ACESSO NEGADO\n\nSua conta foi suspensa.\nMotivo: ${profile.blocked_reason || 'Violação dos termos de uso.'}`);
+                } else {
+                    alert('Sua conta foi removida do sistema.');
+                }
+                
+                if (!isAdminDomain) setViewState({ type: 'LANDING' });
+                if (isAdminDomain) setViewState({ type: 'ADMIN_LOGIN' });
+            }
+        }
+    };
+
+    // Check immediately on mount and whenever view state changes (navigation)
+    if (session) {
+        checkSecurityStatus();
+    }
+  }, [session, viewState.type, isAdminDomain]);
+
   // REDIRECT ON LOGIN
   useEffect(() => {
       // Se o usuário logar e estiver na Landing Page (e não estiver no domínio admin), redireciona para Ideias
