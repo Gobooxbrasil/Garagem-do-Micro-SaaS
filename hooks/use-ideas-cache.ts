@@ -133,10 +133,12 @@ export function useIdeaDetail(ideaId: string) {
     },
     initialData: () => {
       // Tenta achar em cache de listagem geral (ideias ou showroom)
+      if (!ideaId) return undefined;
       const allIdeas = queryClient.getQueryData<Idea[]>(CACHE_KEYS.ideas.list({})) 
         || queryClient.getQueryData<Idea[]>(CACHE_KEYS.ideas.list({ onlyShowroom: true }));
       return allIdeas?.find((idea) => idea.id === ideaId);
     },
+    enabled: !!ideaId && ideaId !== '', // CORREÇÃO: Só executa se tiver ID
     ...CACHE_STRATEGIES.DYNAMIC,
   });
 }

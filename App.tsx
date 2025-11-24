@@ -77,6 +77,15 @@ const App: React.FC = () => {
   // -- IDEAS HOOKS --
   const { data: rawIdeas, isLoading: ideasLoading } = useIdeas({ userId: session?.user?.id });
   
+  // -- IDEAS STATE --
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedNiche, setSelectedNiche] = useState('Todos');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [showMostVotedOnly, setShowMostVotedOnly] = useState(false);
+  const [showMyIdeasOnly, setShowMyIdeasOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'votes' | 'newest'>('newest');
+  const [ideasViewMode, setIdeasViewMode] = useState<'grid' | 'list'>('grid');
+
   // -- SHOWROOM HOOKS --
   const [showroomSearch, setShowroomSearch] = useState('');
   const [showroomCategory, setShowroomCategory] = useState('Todos');
@@ -127,15 +136,6 @@ const App: React.FC = () => {
   // DELETE CONFIRMATION STATE
   const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
-
-  // FILTER & VIEW STATES (IDEAS TAB)
-  const [selectedNiche, setSelectedNiche] = useState<string>('Todos');
-  const [sortBy, setSortBy] = useState<'newest' | 'votes'>('newest');
-  const [ideasViewMode, setIdeasViewMode] = useState<'grid' | 'list'>('grid');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [showMostVotedOnly, setShowMostVotedOnly] = useState(false); 
-  const [showMyIdeasOnly, setShowMyIdeasOnly] = useState(false);
 
   // DATA FETCHING FOR SELECTED IDEA (RESTORED FUNCTIONALITY)
   // We need to fetch full details (comments, supporters) when a card is clicked
@@ -936,7 +936,7 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center text-center gap-2">
             <div className="flex items-center gap-2 text-gray-400">
                 <AlertTriangle className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">Sistema em Alpha (v0.1.0)</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Sistema v1.0.1</span>
             </div>
             <p className="text-[10px] text-gray-500 max-w-md leading-relaxed">
                 A Garagem está em fase inicial de desenvolvimento. Funcionalidades podem mudar e bugs podem ocorrer. 
