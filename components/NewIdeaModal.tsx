@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Idea } from '../types';
 import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search, FileCode, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info, CheckCircle2, Youtube } from 'lucide-react';
@@ -10,6 +11,9 @@ interface NewIdeaModalProps {
   onSave: (idea: any) => void; 
   initialData?: Idea | null;
 }
+
+const MAX_IMAGES = 6;
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 // Componente Helper para Tooltips
 const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
@@ -33,13 +37,13 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
     niche: '',
     pain: '',
     solution: '',
-    why: '', // Novo campo
+    why: '', 
     why_is_private: false,
     pricing_model: '',
     target: '',
     sales_strategy: '',
     pdr: '',
-    youtube_video_url: '', // Novo campo
+    youtube_url: '', // Atualizado para youtube_url
     images: [] as string[],
     
     // Monetization
@@ -64,7 +68,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             target: initialData.target || '',
             sales_strategy: initialData.sales_strategy || '',
             pdr: initialData.pdr || '',
-            youtube_video_url: initialData.youtube_video_url || '',
+            youtube_url: initialData.youtube_url || initialData.youtube_video_url || '',
             images: initialData.images || [],
             monetization_type: (initialData.monetization_type as any) || 'NONE',
             price: initialData.price ? String(initialData.price) : '',
@@ -75,7 +79,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
     } else if (isOpen && !initialData) {
         setFormData({
             title: '', niche: '', pain: '', solution: '', why: '', why_is_private: false,
-            pricing_model: '', target: '', sales_strategy: '', pdr: '', youtube_video_url: '', images: [],
+            pricing_model: '', target: '', sales_strategy: '', pdr: '', youtube_url: '', images: [],
             monetization_type: 'NONE', price: '', hidden_fields: [], contact_phone: '', contact_email: ''
         });
     }
@@ -99,7 +103,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
         ...formData,
         id: initialData?.id,
         price: formData.price ? Number(formData.price) : undefined,
-        why_is_private: !!formData.why_is_private 
+        why_is_private: !!formData.why_is_private,
+        youtube_url: formData.youtube_url || null,
+        // Fallback para manter compatibilidade
+        youtube_video_url: formData.youtube_url || null 
     });
     onClose();
     setError(null);
@@ -124,14 +131,24 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    const file = files[0];
-    if (file.size > 2 * 1024 * 1024) {
-        setError('A imagem deve ter no máximo 2MB.');
+    
+    // Validate Limits
+    if (formData.images.length >= MAX_IMAGES) {
+        setError(`Limite de ${MAX_IMAGES} imagens atingido.`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
     }
+
+    const file = files[0];
+    if (file.size > MAX_FILE_SIZE) {
+        setError('A imagem deve ter no máximo 5MB.');
+        return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => {
         setFormData(prev => ({ ...prev, images: [...prev.images, reader.result as string] }));
+        setError(null);
     };
     reader.readAsDataURL(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -266,7 +283,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
 
             <div>
                 <label className={labelClass}><Youtube className="w-3.5 h-3.5 mr-1.5 text-red-500" /> Vídeo Apresentação (Opcional)</label>
-                <input type="url" name="youtube_video_url" value={formData.youtube_video_url} onChange={handleChange} className={inputClass} placeholder="Link do vídeo no YouTube (Ex: Pitch da ideia)" />
+                <input type="url" name="youtube_url" value={formData.youtube_url} onChange={handleChange} className={inputClass} placeholder="Link do vídeo no YouTube (Ex: Pitch da ideia)" />
             </div>
 
             <div>
@@ -282,7 +299,9 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
 
             {/* Images */}
             <div>
-                <label className={labelClass}>Imagens de Referência (Opcional)</label>
+                <div className="flex items-center justify-between mb-1">
+                    <label className={labelClass}>Imagens de Referência ({formData.images.length}/{MAX_IMAGES})</label>
+                </div>
                 <div className="flex flex-wrap gap-4 mt-2">
                     {formData.images.map((img, idx) => (
                         <div key={idx} className="relative w-24 h-24 rounded-xl overflow-hidden border border-gray-200 group">
@@ -290,12 +309,19 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
                             <button type="button" onClick={() => removeImage(idx)} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-5 h-5 text-white" /></button>
                         </div>
                     ))}
-                    <div onClick={() => fileInputRef.current?.click()} className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-apple-blue hover:bg-blue-50 transition-colors text-gray-400 hover:text-apple-blue">
-                        <Upload className="w-6 h-6 mb-1" />
-                        <span className="text-[9px] font-bold uppercase">Adicionar</span>
-                    </div>
+                    
+                    {formData.images.length < MAX_IMAGES && (
+                        <div onClick={() => fileInputRef.current?.click()} className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-apple-blue hover:bg-blue-50 transition-colors text-gray-400 hover:text-apple-blue">
+                            <Upload className="w-6 h-6 mb-1" />
+                            <span className="text-[9px] font-bold uppercase">Adicionar</span>
+                        </div>
+                    )}
+                    
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                 </div>
+                <p className="text-xs text-gray-400 mt-2">
+                    {formData.images.length >= MAX_IMAGES ? 'Limite de imagens atingido.' : 'PNG, JPG até 5MB'}
+                </p>
             </div>
 
             {/* Monetization Section */}

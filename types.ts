@@ -73,7 +73,8 @@ export interface Idea {
   showroom_approved_at?: string;
 
   // New Field for Regular Ideas
-  youtube_video_url?: string;
+  youtube_video_url?: string; // Legacy
+  youtube_url?: string; // New Standard
 
   // Frontend states
   isFavorite?: boolean; 

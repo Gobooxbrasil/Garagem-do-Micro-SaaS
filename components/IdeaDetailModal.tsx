@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Idea, Improvement } from '../types';
 import ShareButton from './ShareButton';
@@ -106,7 +107,8 @@ const getNicheVisuals = (niche: string) => {
 
 const getYoutubeId = (url: string | undefined) => {
     if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    // Regex suportando Shorts, Embed, Watch, etc.
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
 };
@@ -230,7 +232,11 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const isUnlocked = idea?.user_id === currentUserId || 
                      idea?.idea_transactions?.some(t => t.user_id === currentUserId && t.status === 'confirmed' && t.transaction_type === 'purchase');
 
-  const youtubeId = getYoutubeId(idea.youtube_video_url || idea.showroom_video_url);
+  // Logica segura para URL de video: Prioriza Showroom se for projeto de showroom
+  const rawVideoUrl = idea.is_showroom 
+      ? (idea.showroom_video_url || idea.youtube_video_url || idea.youtube_url) 
+      : (idea.youtube_url || idea.youtube_video_url || idea.showroom_video_url);
+  const youtubeId = getYoutubeId(rawVideoUrl);
 
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
@@ -360,7 +366,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
             
             <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-4 right-4 bg-black/50 backdrop-blur-md p-2 rounded-full text-white hover:bg-black transition-colors z-20 border border-white/10 hover:scale-105"><X className="w-5 h-5" /></button>
             
-            {/* Gradient Overlay (Reduzido para ver mais a imagem) */}
+            {/* Gradient Overlay */}
             <div className="absolute bottom-0 left-0 w-full h-20 bg-gradient-to-t from-white via-white/60 to-transparent"></div>
             
             {/* Gallery Button */}
