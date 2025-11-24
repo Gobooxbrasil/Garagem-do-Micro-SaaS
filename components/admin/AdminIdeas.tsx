@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useIdeas } from '../../hooks/use-ideas-cache';
-import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet, AlertCircle, HelpCircle } from 'lucide-react';
 import NewIdeaModal from '../NewIdeaModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -131,7 +131,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
     };
 
-    // --- LÓGICA DE IMPORTAÇÃO CSV ---
+    // --- LÓGICA DE IMPORTAÇÃO CSV (Parser Robusto) ---
 
     const handleDownloadTemplate = () => {
         const headers = [
@@ -162,7 +162,6 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             "0"
         ];
 
-        // \uFEFF é o BOM (Byte Order Mark) para o Excel reconhecer UTF-8 corretamente
         const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
             + headers.join(",") + "\n" 
             + exampleRow.map(field => `"${field}"`).join(",");
@@ -178,86 +177,108 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
     const handleImportClick = () => {
         if (fileInputRef.current) {
+            fileInputRef.current.value = ''; // Reset value
             fileInputRef.current.click();
         }
     };
 
-    // Parser manual de CSV robusto (State Machine) para lidar com multiline e quotes complexos
+    // State Machine CSV Parser (RFC 4180 Compliantish)
+    // Lida com: Aspas duplas, quebras de linha dentro de campos, delimitadores variados (auto-detect)
     const parseCSV = (text: string) => {
-        // Remove BOM se existir
+        let cursor = 0;
+        
+        // 1. Handle BOM (Byte Order Mark) se existir
         if (text.charCodeAt(0) === 0xFEFF) {
-            text = text.slice(1);
+            cursor++;
         }
 
-        const arr: string[][] = [];
-        let quote = false;
-        let row = 0;
-        let col = 0;
-        let c = 0;
-        const len = text.length;
-        
-        arr[row] = [];
-        arr[row][col] = "";
+        const rows: string[][] = [];
+        let row: string[] = [];
+        let currentVal = '';
+        let insideQuote = false;
 
-        // Heurística simples para detecção de delimitador
-        const sample = text.slice(0, 1000);
-        const semicolonCount = (sample.match(/;/g) || []).length;
-        const commaCount = (sample.match(/,/g) || []).length;
+        // Auto-detect delimiter (semicolon or comma) based on first line
+        const firstLineEnd = text.indexOf('\n');
+        const firstLine = firstLineEnd > -1 ? text.substring(cursor, firstLineEnd) : text.substring(cursor);
+        const semicolonCount = (firstLine.match(/;/g) || []).length;
+        const commaCount = (firstLine.match(/,/g) || []).length;
         const delimiter = semicolonCount > commaCount ? ';' : ',';
 
-        while (c < len) {
-            let cc = text[c];
-            let nc = text[c + 1];
+        while (cursor < text.length) {
+            const char = text[cursor];
+            const nextChar = text[cursor + 1];
 
-            if (cc === '"') {
-                if (quote && nc === '"') {
-                    arr[row][col] += '"'; 
-                    c++; 
+            if (insideQuote) {
+                if (char === '"') {
+                    if (nextChar === '"') {
+                        // Escaped quote ("") inside a quoted field -> becomes a single "
+                        currentVal += '"';
+                        cursor++; // Skip the next quote
+                    } else {
+                        // End of quoted field
+                        insideQuote = false;
+                    }
                 } else {
-                    quote = !quote; 
+                    currentVal += char;
                 }
-            } else if (cc === delimiter && !quote) {
-                col++;
-                arr[row][col] = "";
-            } else if ((cc === '\r' || cc === '\n') && !quote) {
-                if (cc === '\r' && nc === '\n') c++;
-                row++;
-                arr[row] = [];
-                col = 0;
-                arr[row][col] = "";
             } else {
-                arr[row][col] += cc;
+                if (char === '"') {
+                    insideQuote = true;
+                } else if (char === delimiter) {
+                    // End of field
+                    row.push(currentVal.trim());
+                    currentVal = '';
+                } else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
+                    // End of row
+                    row.push(currentVal.trim());
+                    rows.push(row);
+                    row = [];
+                    currentVal = '';
+                    if (char === '\r') cursor++; // Skip \n if we are at \r
+                } else if (char === '\r') {
+                    // Carriage return without newline (rare, but possible in old macs)
+                    row.push(currentVal.trim());
+                    rows.push(row);
+                    row = [];
+                    currentVal = '';
+                } else {
+                    currentVal += char;
+                }
             }
-            c++;
+            cursor++;
         }
 
-        // Remove última linha se vazia
-        if (arr.length > 0 && (arr[arr.length - 1].length === 0 || (arr[arr.length - 1].length === 1 && arr[arr.length - 1][0] === ""))) {
-            arr.pop();
+        // Push last field/row if exists
+        if (currentVal || row.length > 0) {
+            row.push(currentVal.trim());
+            rows.push(row);
         }
 
-        if (arr.length === 0) return [];
+        // 2. Process Rows to Objects
+        if (rows.length === 0) return [];
 
-        const headers = arr[0].map(h => h.trim());
-        const data = [];
+        // Remove empty trailing rows
+        const cleanRows = rows.filter(r => r.length > 0 && r.some(c => c !== ''));
         
-        for (let i = 1; i < arr.length; i++) {
-            const rowData = arr[i];
+        if (cleanRows.length === 0) return [];
+
+        const headers = cleanRows[0].map(h => h.trim().toLowerCase().replace(/['"]/g, '')); // Normalize headers
+        const dataObjects = [];
+
+        for (let i = 1; i < cleanRows.length; i++) {
+            const rowValues = cleanRows[i];
+            // Skip if row doesn't match header length significantly (bad parsing check) or is empty
+            if (rowValues.length < 2) continue; 
+
             const obj: any = {};
-            let hasValue = false;
-            
-            headers.forEach((h, idx) => {
-                const val = rowData[idx] || '';
-                obj[h] = val;
-                if (val) hasValue = true;
+            headers.forEach((header, index) => {
+                const val = rowValues[index] || '';
+                obj[header] = val;
             });
-            
-            // Filter empty objects
-            if (Object.values(obj).some(v => typeof v === 'string' && v.trim() !== '')) {
-                data.push(obj);
-            }
+            dataObjects.push(obj);
         }
-        return data;
+
+        return dataObjects;
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,35 +299,41 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 const parsedData = parseCSV(text);
                 
                 if (parsedData.length === 0) {
-                    alert("O arquivo parece estar vazio ou inválido.");
+                    alert("O arquivo parece estar vazio ou o formato não foi reconhecido.");
                     setIsImporting(false);
                     return;
                 }
 
+                console.log("Parsed Data Preview:", parsedData.slice(0, 2));
+
+                // Flexible Mapper
                 const rowsToInsert = parsedData.map((row: any) => {
-                    // Função helper para pegar valor ignorando case das chaves (caso o usuário mude header)
-                    const getVal = (keyPart: string) => {
-                        const key = Object.keys(row).find(k => k.toLowerCase().includes(keyPart.toLowerCase()));
+                    // Helper to find key fuzzily
+                    const findVal = (keywords: string[]) => {
+                        const key = Object.keys(row).find(k => keywords.some(kw => k.includes(kw)));
                         return key ? row[key] : "";
                     };
 
                     return {
-                        title: getVal("Titulo") || "Sem Título",
-                        niche: getVal("Nicho") || "Outros",
-                        pain: getVal("Dor") || "",
-                        solution: getVal("Solucao") || "",
-                        why: getVal("Porque") || "",
-                        pricing_model: getVal("Modelo Preco") || "",
-                        target: getVal("Publico Alvo") || "",
-                        sales_strategy: getVal("Estrategia") || "",
-                        pdr: getVal("PDR") || "",
+                        title: findVal(['titulo', 'title', 'nome']) || "Sem Título",
+                        niche: findVal(['nicho', 'categoria', 'niche']) || "Outros",
+                        pain: findVal(['dor', 'problema', 'pain']) || "",
+                        solution: findVal(['solucao', 'solução', 'solution']) || "",
+                        why: findVal(['porque', 'why', 'motivo']) || "",
+                        pricing_model: findVal(['preco', 'preço', 'pricing', 'modelo']) || "",
+                        target: findVal(['publico', 'público', 'target', 'alvo']) || "",
+                        sales_strategy: findVal(['estrategia', 'estratégia', 'sales']) || "",
+                        pdr: findVal(['pdr', 'tecnico', 'técnico', 'stack']) || "",
                         
                         // Monetização e Preço
-                        monetization_type: ["NONE", "PAID", "DONATION"].includes(getVal("Tipo Monetizacao")) 
-                            ? getVal("Tipo Monetizacao") 
+                        monetization_type: ["NONE", "PAID", "DONATION"].includes(findVal(['tipo mon', 'monetizacao'])) 
+                            ? findVal(['tipo mon', 'monetizacao']) 
                             : "NONE",
-                        price: parseFloat(getVal("Valor").replace(',', '.')) || 0, // Trata vírgula decimal
-                        payment_type: getVal("Tipo Monetizacao") === 'PAID' ? 'paid' : getVal("Tipo Monetizacao") === 'DONATION' ? 'donation' : 'free',
+                        
+                        price: parseFloat(findVal(['valor', 'price', 'custo'])?.replace(',', '.') || '0') || 0,
+                        
+                        payment_type: findVal(['tipo mon', 'monetizacao']) === 'PAID' ? 'paid' : 
+                                      findVal(['tipo mon', 'monetizacao']) === 'DONATION' ? 'donation' : 'free',
                         
                         // Campos padrão
                         user_id: session.user.id,
@@ -317,9 +344,13 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     };
                 });
 
-                const { error } = await supabase.from('ideas').insert(rowsToInsert);
-
-                if (error) throw error;
+                // Insert in batches of 50 to avoid payload limits
+                const batchSize = 50;
+                for (let i = 0; i < rowsToInsert.length; i += batchSize) {
+                    const batch = rowsToInsert.slice(i, i + batchSize);
+                    const { error } = await supabase.from('ideas').insert(batch);
+                    if (error) throw error;
+                }
 
                 setImportStatus({ total: rowsToInsert.length, success: rowsToInsert.length });
                 queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
@@ -340,7 +371,8 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             setIsImporting(false);
         };
 
-        reader.readAsText(file); // Default UTF-8, browser handles detection mostly
+        // Force UTF-8 reading
+        reader.readAsText(file, "UTF-8");
     };
 
     const isAllSelected = paginatedData.length > 0 && paginatedData.every(i => selectedIds.has(i.id));
@@ -378,7 +410,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         ref={fileInputRef} 
                         onChange={handleFileChange} 
                         className="hidden" 
-                        accept=".csv" 
+                        accept=".csv,.txt" 
                     />
                     
                     <button 
@@ -393,10 +425,13 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     <button 
                         onClick={handleImportClick}
                         disabled={isImporting}
-                        className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+                        className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 relative group"
                     >
                         {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
                         Importar Planilha
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-black text-white text-[10px] rounded text-center z-50">
+                            Suporta CSV com campos multi-linha (Excel/Google Sheets)
+                        </div>
                     </button>
 
                     <button 
