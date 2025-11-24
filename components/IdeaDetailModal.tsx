@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Idea, Improvement } from '../types';
 import ShareButton from './ShareButton';
@@ -11,7 +12,7 @@ import {
   Zap, 
   DollarSign, 
   Users, 
-  Flame,
+  Flame, 
   Heart,
   Calendar,
   Lightbulb,
@@ -22,30 +23,33 @@ import {
   Code2, 
   Palette, 
   ShoppingCart, 
-  Rocket,
-  Briefcase,
-  Tractor,
-  Plane,
-  Utensils,
-  Truck,
-  FileCode,
-  Lock,
-  Send,
-  Loader2,
-  Gift,
-  CheckCircle,
-  Unlock,
-  User,
-  MessageSquarePlus,
-  Hash,
-  Star,
-  Reply,
-  EyeOff,
-  Target,
-  Megaphone,
-  ExternalLink,
-  Youtube,
-  Edit
+  Rocket, 
+  Briefcase, 
+  Tractor, 
+  Plane, 
+  Utensils, 
+  Truck, 
+  FileCode, 
+  Lock, 
+  Send, 
+  Loader2, 
+  Gift, 
+  CheckCircle, 
+  Unlock, 
+  User, 
+  MessageSquarePlus, 
+  Hash, 
+  Star, 
+  Reply, 
+  EyeOff, 
+  Target, 
+  Megaphone, 
+  ExternalLink, 
+  Youtube, 
+  Edit,
+  Info,
+  Copy,
+  Check
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
@@ -61,6 +65,19 @@ interface IdeaDetailModalProps {
   refreshData: () => void;
   onPromoteIdea?: (idea: Idea) => void;
 }
+
+// Componente Helper para Tooltips
+const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
+  <div className="group relative inline-flex items-center ml-2 align-middle z-50">
+    <Info className="w-4 h-4 text-gray-300 cursor-help hover:text-apple-blue transition-colors" />
+    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+      <div className="bg-gray-900/95 backdrop-blur-sm text-white text-[11px] font-medium py-2.5 px-3.5 rounded-xl shadow-xl border border-white/10 relative leading-relaxed text-center">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900/95"></div>
+      </div>
+    </div>
+  </div>
+);
 
 const getNicheVisuals = (niche: string) => {
     const n = niche.toLowerCase();
@@ -178,6 +195,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [newImprovement, setNewImprovement] = useState('');
   const [submittingImprovement, setSubmittingImprovement] = useState(false);
+  const [pdrCopied, setPdrCopied] = useState(false);
 
   // Payment States
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -238,6 +256,14 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
       if(!onAddImprovement) return;
       try { await onAddImprovement(idea.id, content, parentId); } 
       catch (error) { console.error(error); }
+  };
+
+  const handleCopyPdr = () => {
+      if (idea.pdr) {
+          navigator.clipboard.writeText(idea.pdr);
+          setPdrCopied(true);
+          setTimeout(() => setPdrCopied(false), 2000);
+      }
   };
 
   const handleInitiatePayment = async (type: 'donation' | 'purchase') => {
@@ -365,14 +391,56 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
 
                              {!idea.is_showroom && (
                                  <>
-                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4" /> A Dor Específica (O Problema)</h3>{isHidden('pain') ? renderLockedContent('A Dor') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.pain}</p>)}</div>
-                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> A Solução (O Produto)</h3>{isHidden('solution') ? renderLockedContent('A Solução') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.solution}</p>)}</div>
+                                    <div>
+                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <AlertCircle className="w-4 h-4" /> A Dor Específica (O Problema)
+                                            <InfoTooltip text="Qual dor ou dificuldade os clientes enfrentam no dia a dia que este produto vai resolver?" />
+                                        </h3>
+                                        {isHidden('pain') ? renderLockedContent('A Dor') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.pain}</p>)}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4" /> A Solução (O Produto)
+                                            <InfoTooltip text="Como este produto elimina o problema dos clientes de forma simples e eficaz?" />
+                                        </h3>
+                                        {isHidden('solution') ? renderLockedContent('A Solução') : (<p className="text-lg text-gray-800 leading-relaxed font-light">{idea.solution}</p>)}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <Lightbulb className="w-4 h-4" /> Por que é um bom Micro SaaS (Descrição)?
+                                            <InfoTooltip text="Por que o churn é baixo? Por que o MVP é simples? Por que o valor é percebido rápido?" />
+                                        </h3>
+                                        {isHidden('why') ? renderLockedContent('o Diferencial') : (
+                                            idea.why_is_private && !isOwner ? (
+                                                <p className="text-sm text-gray-400 italic mt-1 flex items-center gap-1 bg-gray-50 p-2 rounded-lg border border-gray-100"><EyeOff className="w-3 h-3"/> Oculto pelo criador</p>
+                                            ) : (
+                                                <p className="text-lg text-gray-800 leading-relaxed font-light">{idea.why}</p>
+                                            )
+                                        )}
+                                    </div>
                                  </>
                              )}
                          </div>
 
                          {!idea.is_showroom && (
-                             <div><h3 className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileCode className="w-4 h-4" /> Tech Specs (PDR)</h3>{isHidden('pdr') ? renderLockedContent('o PDR Completo') : (<div className="bg-slate-900 text-slate-300 p-6 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap border border-slate-800 shadow-inner relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>{idea.pdr || "// Nenhum detalhe técnico fornecido."}</div>)}</div>
+                             <div>
+                                <div className="flex justify-between items-end mb-3">
+                                    <h3 className="text-xs font-bold text-indigo-500 uppercase tracking-widest flex items-center gap-2">
+                                        <FileCode className="w-4 h-4" /> Briefing Técnico (PRD)
+                                        <InfoTooltip text="É o documento que explica a ideia do Micro SaaS, as funcionalidades, as regras e como a IA deve agir,  tudo de forma organizada para que a ferramenta consiga criar o produto corretamente." />
+                                    </h3>
+                                    {!isHidden('pdr') && idea.pdr && (
+                                        <button
+                                            onClick={handleCopyPdr}
+                                            className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all duration-200 px-2 py-1 rounded-md ${pdrCopied ? 'bg-green-100 text-green-700' : 'text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800'}`}
+                                            title="Copiar Texto Completo"
+                                        >
+                                            {pdrCopied ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
+                                        </button>
+                                    )}
+                                </div>
+                                {isHidden('pdr') ? renderLockedContent('o PRD Completo') : (<div className="bg-slate-900 text-slate-300 p-6 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap border border-slate-800 shadow-inner relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>{idea.pdr || "// Nenhum detalhe técnico fornecido."}</div>)}
+                             </div>
                          )}
 
                          <div className="pt-8 border-t border-gray-100">
@@ -419,14 +487,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
 
                          <div className="border-t border-gray-100 pt-6 space-y-4">
                              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Modelo de Receita</label><p className="font-semibold text-gray-800 flex items-center gap-2 mt-1"><DollarSign className="w-4 h-4 text-green-600" /> {idea.pricing_model}</p></div>
-                             <div>
-                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Por que é um bom Micro SaaS?</label>
-                                 {idea.why_is_private && !isOwner ? (
-                                     <p className="text-sm text-gray-400 italic mt-1 flex items-center gap-1 bg-gray-50 p-2 rounded-lg border border-gray-100"><EyeOff className="w-3 h-3"/> Oculto pelo criador</p>
-                                 ) : (
-                                     <p className="text-sm text-gray-600 italic mt-1 leading-relaxed">"{idea.why}"</p>
-                                 )}
-                             </div>
                          </div>
                      </div>
                  </div>

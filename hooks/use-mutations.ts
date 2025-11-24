@@ -1,3 +1,4 @@
+
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
 import { CACHE_KEYS } from '../lib/cache-keys';
@@ -98,14 +99,47 @@ export function useAddImprovement() {
   
     return useMutation({
       mutationFn: async ({ ideaId, userId, content, parentId }: { ideaId: string; userId: string; content: string, parentId?: string }) => {
-        const { data, error } = await supabase.from('idea_improvements').insert({
+        // 1. Inserir o comentário/melhoria
+        const { data: newImprovement, error } = await supabase.from('idea_improvements').insert({
             idea_id: ideaId,
             user_id: userId,
             content: content,
             parent_id: parentId || null
         }).select('*, profiles(full_name, avatar_url)').single();
+        
         if (error) throw error;
-        return data;
+
+        // 2. Buscar informações da ideia para notificar o dono
+        const { data: ideaData } = await supabase
+            .from('ideas')
+            .select('user_id, title')
+            .eq('id', ideaId)
+            .single();
+
+        // 3. Criar notificação se o autor do comentário não for o dono da ideia
+        if (ideaData && ideaData.user_id !== userId) {
+            // Buscar dados do remetente para o payload
+            const { data: senderProfile } = await supabase
+                .from('profiles')
+                .select('full_name, avatar_url')
+                .eq('id', userId)
+                .single();
+
+            await supabase.from('notifications').insert({
+                recipient_id: ideaData.user_id,
+                sender_id: userId,
+                type: 'NEW_IMPROVEMENT',
+                payload: {
+                    idea_id: ideaId,
+                    idea_title: ideaData.title,
+                    message: content.substring(0, 60) + (content.length > 60 ? '...' : ''),
+                    user_name: senderProfile?.full_name || 'Alguém',
+                    user_avatar: senderProfile?.avatar_url
+                }
+            });
+        }
+
+        return newImprovement;
       },
       onSuccess: (newImprovement, variables) => {
           const key = CACHE_KEYS.ideas.detail(variables.ideaId);

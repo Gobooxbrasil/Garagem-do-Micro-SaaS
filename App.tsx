@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
-import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType, Feedback } from './types';
+import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType, Feedback, Notification } from './types';
 import IdeaCard from './components/IdeaCard';
 import ProjectDetail from './components/ProjectDetail';
 import NewProjectModal from './components/NewProjectModal';
@@ -50,7 +51,10 @@ import {
   Map,
   Filter,
   Rocket,
-  ShieldCheck 
+  ShieldCheck,
+  Check,
+  Trash2,
+  MessageCircle
 } from 'lucide-react';
 
 const APP_DOMAIN = 'app.garagemdemicrosaas.com.br';
@@ -77,6 +81,7 @@ const App: React.FC = () => {
         // But initially, assume login screen if pure admin access
         return { type: 'ADMIN_LOGIN' };
     }
+    // Se estiver no modo app, iniciamos em IDEAS, mas o useEffect de auth vai corrigir para LANDING se não tiver sessão
     return { type: isAppMode ? 'IDEAS' : 'LANDING' };
   });
   
@@ -134,7 +139,9 @@ const App: React.FC = () => {
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   
   const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
@@ -177,21 +184,27 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-      if (isAppMode && !isAuthChecking) {
+      // Regra de proteção global: Se não estiver logado, força LANDING (ou ADMIN_LOGIN se for domínio admin)
+      if (!isAuthChecking) {
           const protectedTypes = ['IDEAS', 'SHOWROOM', 'PROJECT_DETAIL', 'PROFILE', 'ROADMAP', 'ADMIN'];
-          // Admin Login is public (the form itself)
+          // Se não tem sessão e tenta acessar rota protegida
           if (!session && protectedTypes.includes(viewState.type) && viewState.type !== 'ADMIN_LOGIN') {
-              if (viewState.type !== 'IDEAS' && viewState.type !== 'SHOWROOM') {
-                  // Fallback for app mode protection
-                  if (!isAdminDomain) {
-                     setViewState({ type: 'IDEAS' });
-                  } else {
-                     setViewState({ type: 'ADMIN_LOGIN' });
-                  }
+              if (!isAdminDomain) {
+                 setViewState({ type: 'LANDING' });
+              } else {
+                 setViewState({ type: 'ADMIN_LOGIN' });
               }
           }
       }
-  }, [viewState.type, session, isAuthChecking, isAppMode, isAdminDomain]);
+  }, [viewState.type, session, isAuthChecking, isAdminDomain]);
+
+  // REDIRECT ON LOGIN
+  useEffect(() => {
+      // Se o usuário logar e estiver na Landing Page (e não estiver no domínio admin), redireciona para Ideias
+      if (session && !isAuthChecking && viewState.type === 'LANDING' && !isAdminDomain) {
+          setViewState({ type: 'IDEAS' });
+      }
+  }, [session, isAuthChecking, viewState.type, isAdminDomain]);
 
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
@@ -235,10 +248,6 @@ const App: React.FC = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-         // Only redirect to IDEAS if landing and NOT on admin domain
-         if (isAppMode && viewState.type === 'LANDING' && !isAdminDomain) {
-             setViewState({ type: 'IDEAS' });
-         }
          fetchUserAvatar(session.user.id);
       }
     }).finally(() => {
@@ -248,22 +257,25 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-          if (isAppMode && viewState.type === 'LANDING' && !isAdminDomain) setViewState({ type: 'IDEAS' });
           fetchUserAvatar(session.user.id);
       } else {
-          if (!isAppMode && !isAdminDomain) setViewState({ type: 'LANDING' });
+          // Se deslogar, manda pra Landing
+          if (!isAdminDomain) setViewState({ type: 'LANDING' });
           if (isAdminDomain) setViewState({ type: 'ADMIN_LOGIN' });
           setUserAvatar(null);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [isAppMode, isAdminDomain]);
+  }, [isAdminDomain]);
 
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
           if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
               setShowProfileMenu(false);
+          }
+          if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+              setShowNotifications(false);
           }
       };
       document.addEventListener("mousedown", handleClickOutside);
@@ -273,7 +285,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
       await supabase.auth.signOut();
       queryClient.clear();
-      if (!isAppMode && !isAdminDomain) setViewState({ type: 'LANDING' });
+      if (!isAdminDomain) setViewState({ type: 'LANDING' });
       if (isAdminDomain) setViewState({ type: 'ADMIN_LOGIN' });
       setShowProfileMenu(false);
   };
@@ -285,9 +297,35 @@ const App: React.FC = () => {
       } catch (error) { console.error(error); }
   };
 
-  const markNotificationAsRead = async (id: string) => {
+  const markNotificationAsRead = async (id: string, e?: React.MouseEvent) => {
+      if (e) e.stopPropagation();
       await supabase.from('notifications').update({ read: true }).eq('id', id);
       queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id) });
+  };
+
+  const deleteNotification = async (id: string, e?: React.MouseEvent) => {
+      if (e) e.stopPropagation();
+      await supabase.from('notifications').delete().eq('id', id);
+      queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id) });
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+      // 1. Marcar como lido
+      if (!notification.read) {
+          await markNotificationAsRead(notification.id);
+      }
+
+      // 2. Navegar se tiver payload de ideia
+      if (notification.payload?.idea_id) {
+          // Navega para a Ideia/Projeto
+          setSelectedIdeaId(notification.payload.idea_id);
+          prefetchIdeaDetail(notification.payload.idea_id);
+          
+          // Fecha dropdown após delay de 2s para feedback visual
+          setTimeout(() => {
+              setShowNotifications(false);
+          }, 2000);
+      }
   };
 
   const unreadCount = notificationsData?.filter(n => !n.read).length || 0;
@@ -300,8 +338,19 @@ const App: React.FC = () => {
     return true;
   };
 
-  const handleRedirectToApp = () => {
-      window.location.href = `https://${APP_DOMAIN}`;
+  const handleLandingAction = () => {
+      if (session) {
+          setViewState({ type: 'IDEAS' });
+          return;
+      }
+
+      if (isAppMode) {
+          // Se já está no app mas caiu na landing (não logado)
+          setIsAuthModalOpen(true);
+      } else {
+          // Se está no site institucional
+          window.location.href = `https://${APP_DOMAIN}`;
+      }
   };
 
   const handleUpvote = (id: string) => {
@@ -489,13 +538,13 @@ const App: React.FC = () => {
       );
   }
 
-  // PUBLIC LANDING (Only if not in app mode and not admin domain)
-  if (!isAppMode && viewState.type === 'LANDING' && !isAdminDomain) {
+  // PUBLIC LANDING (Ou se não estiver logado no App)
+  if (viewState.type === 'LANDING' && !isAdminDomain) {
     return (
       <>
         <LandingPage 
-          onEnter={handleRedirectToApp}
-          onLogin={handleRedirectToApp}
+          onEnter={handleLandingAction}
+          onLogin={() => setIsAuthModalOpen(true)}
           isLoggedIn={!!session} 
         />
         <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
@@ -503,7 +552,7 @@ const App: React.FC = () => {
     );
   }
 
-  // APP LAYOUT (Standard User Interface)
+  // APP LAYOUT (Standard User Interface - Protected)
   return (
     <div className="min-h-screen bg-apple-bg font-sans text-apple-text selection:bg-apple-blue selection:text-white pb-20 flex flex-col">
       
@@ -533,7 +582,7 @@ const App: React.FC = () => {
                 <button onClick={() => setViewState({ type: 'ROADMAP' })} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${viewState.type === 'ROADMAP' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Map className="w-4 h-4" /> Roadmap</button>
              </div>
 
-             <div className="relative">
+             <div className="relative" ref={notificationRef}>
                  <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-gray-400 hover:text-black transition-colors relative">
                      <Bell className="w-5 h-5" />
                      {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
@@ -546,14 +595,41 @@ const App: React.FC = () => {
                          </div>
                          <div className="max-h-80 overflow-y-auto custom-scrollbar">
                              {!notificationsData || notificationsData.length === 0 ? <div className="p-8 text-center text-gray-400 text-sm">Nenhuma notificação.</div> : notificationsData.map(notif => (
-                                 <div key={notif.id} onClick={() => markNotificationAsRead(notif.id)} className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${!notif.read ? 'bg-blue-50/30' : ''}`}>
-                                     <div className="flex items-start gap-3">
-                                         <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notif.read ? 'bg-blue-500' : 'bg-transparent'}`}></div>
-                                         <div>
-                                             <p className="text-xs text-gray-400 mb-1">{new Date(notif.created_at).toLocaleDateString()}</p>
-                                             <p className="text-sm text-gray-700">{notif.type === 'NEW_VOTE' && `Novo voto na sua ideia.`}{notif.type === 'NEW_INTEREST' && `Novo interessado no seu projeto!`}{notif.type === 'NEW_DONATION' && `💰 Você recebeu uma doação!`}{notif.type === 'PIX_REQUEST' && notif.payload?.message}{notif.type === 'SYSTEM' && notif.payload?.message}{!['NEW_VOTE', 'NEW_INTEREST', 'NEW_DONATION', 'SYSTEM', 'PIX_REQUEST'].includes(notif.type) && 'Nova interação.'}</p>
-                                             {notif.type === 'PIX_REQUEST' && <button onClick={() => setViewState({type: 'PROFILE'})} className="mt-2 text-xs bg-black text-white px-3 py-1 rounded-md">Configurar Pix</button>}
-                                         </div>
+                                 <div 
+                                    key={notif.id} 
+                                    onClick={() => handleNotificationClick(notif)} 
+                                    className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer flex gap-3 items-start group ${!notif.read ? 'bg-blue-50/30' : ''}`}
+                                 >
+                                     <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notif.read ? 'bg-blue-500' : 'bg-transparent'}`}></div>
+                                     <div className="flex-grow min-w-0">
+                                         <p className="text-xs text-gray-400 mb-1 flex justify-between">
+                                            {new Date(notif.created_at).toLocaleDateString()}
+                                         </p>
+                                         <p className="text-sm text-gray-700 line-clamp-2">
+                                            {notif.type === 'NEW_VOTE' && `Novo voto na sua ideia.`}
+                                            {notif.type === 'NEW_INTEREST' && `Novo interessado no seu projeto!`}
+                                            {notif.type === 'NEW_DONATION' && `💰 Você recebeu uma doação!`}
+                                            {notif.type === 'PIX_REQUEST' && notif.payload?.message}
+                                            {notif.type === 'NEW_IMPROVEMENT' && (
+                                                <span className="flex flex-col gap-1">
+                                                    <span className="font-bold flex items-center gap-1"><MessageCircle className="w-3 h-3 text-indigo-500"/> Comentário em "{notif.payload?.idea_title}"</span>
+                                                    <span className="italic text-gray-500">"{notif.payload?.message}"</span>
+                                                </span>
+                                            )}
+                                            {notif.type === 'SYSTEM' && notif.payload?.message}
+                                            {!['NEW_VOTE', 'NEW_INTEREST', 'NEW_DONATION', 'SYSTEM', 'PIX_REQUEST', 'NEW_IMPROVEMENT'].includes(notif.type) && 'Nova interação.'}
+                                         </p>
+                                         {notif.type === 'PIX_REQUEST' && <span className="mt-2 text-xs bg-black text-white px-3 py-1 rounded-md inline-block">Configurar Pix</span>}
+                                     </div>
+                                     <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity self-center">
+                                         {!notif.read && (
+                                             <button onClick={(e) => markNotificationAsRead(notif.id, e)} className="p-1 hover:bg-green-100 text-green-600 rounded" title="Marcar como lida">
+                                                 <Check className="w-3 h-3" />
+                                             </button>
+                                         )}
+                                         <button onClick={(e) => deleteNotification(notif.id, e)} className="p-1 hover:bg-red-100 text-red-600 rounded" title="Excluir">
+                                             <Trash2 className="w-3 h-3" />
+                                         </button>
                                      </div>
                                  </div>
                              ))}
@@ -620,7 +696,7 @@ const App: React.FC = () => {
         {viewState.type === 'IDEAS' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex flex-col md:flex-row justify-between items-end mb-10 pb-6 border-b border-gray-100">
-                    <div><h1 className="text-4xl font-bold text-apple-text tracking-tight mb-2">Explorar Ideias</h1><p className="text-gray-500 text-lg font-light">Descubra oportunidades para criar e ganhar dinheiro com seu Micro SaaS.</p></div>
+                    <div><h1 className="text-4xl font-bold text-apple-text tracking-tight mb-2">Explorar Ideias</h1><p className="text-gray-500 text-lg font-light">Descubra oportunidades para criar e ganhar dinheiro com Micro SaaS.</p></div>
                     <button onClick={() => { if (requireAuth()) setIsIdeaModalOpen(true); }} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"><Lightbulb className="w-5 h-5 text-yellow-400 fill-yellow-400" /> Nova Ideia</button>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
