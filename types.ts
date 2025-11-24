@@ -89,6 +89,10 @@ export interface Idea {
   contact_phone?: string;
   contact_email?: string;
 
+  // Demo Info
+  demo_email?: string;
+  demo_password?: string;
+
   // View Fields (cached_ideas_with_stats)
   creator_name?: string | null;
   creator_avatar?: string | null;
@@ -229,7 +233,8 @@ export type ViewState =
   | { type: 'ROADMAP' }
   | { type: 'PROJECT_DETAIL'; projectId: string } 
   | { type: 'PROFILE' }
-  | { type: 'ADMIN'; subview: AdminSubview };
+  | { type: 'ADMIN'; subview: AdminSubview }
+  | { type: 'ADMIN_LOGIN' };
 
 // SHOWROOM SPECIFIC TYPES
 export interface ShowroomFilters {

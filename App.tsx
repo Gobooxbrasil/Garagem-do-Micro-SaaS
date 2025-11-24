@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
-import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType } from './types';
+import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType, Feedback } from './types';
 import IdeaCard from './components/IdeaCard';
 import ProjectDetail from './components/ProjectDetail';
 import NewProjectModal from './components/NewProjectModal';
@@ -11,10 +10,11 @@ import AuthModal from './components/AuthModal';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import LandingPage from './components/LandingPage';
 import ProfileView from './components/ProfileView'; 
-import AdminLayout from './components/admin/AdminLayout'; // Import Admin
+import AdminLayout from './components/admin/AdminLayout'; 
+import AdminLogin from './components/admin/AdminLogin'; // New Import
 import { useIdeas, useUserInteractions, useNotifications, useIdeaDetail } from './hooks/use-ideas-cache';
 import { useVoteIdea, useToggleFavorite, useAddImprovement, useJoinInterest } from './hooks/use-mutations';
-import { useFeedbackList, useUserFeedbackVotes } from './hooks/use-feedback';
+import { useFeedbackList, useUserFeedbackVotes, useVoteFeedback } from './hooks/use-feedback';
 import { usePrefetch } from './hooks/use-prefetch';
 import { useQueryClient } from '@tanstack/react-query';
 import { CACHE_KEYS } from './lib/cache-keys';
@@ -50,7 +50,7 @@ import {
   Map,
   Filter,
   Rocket,
-  ShieldCheck // Added for Admin
+  ShieldCheck 
 } from 'lucide-react';
 
 const APP_DOMAIN = 'app.garagemdemicrosaas.com.br';
@@ -60,8 +60,12 @@ const App: React.FC = () => {
   const hostname = window.location.hostname;
   const isLandingDomain = hostname === MAIN_DOMAIN || hostname === `www.${MAIN_DOMAIN}`;
   const isAdminDomain = hostname.startsWith('admin.');
+  const isLocal = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isAppMode = !isLandingDomain;
   
+  // URL Admin absoluta conforme solicitado para evitar erros de rota relativa
+  const adminUrl = 'https://admin.garagemdemicrosaas.com.br';
+
   const [session, setSession] = useState<any>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
@@ -69,7 +73,9 @@ const App: React.FC = () => {
   // Initialize ViewState based on Domain or Path
   const [viewState, setViewState] = useState<ViewState>(() => {
     if (isAdminDomain || window.location.pathname.startsWith('/admin')) {
-        return { type: 'ADMIN', subview: 'DASHBOARD' };
+        // We don't know if they are logged in yet, so default to login check logic later
+        // But initially, assume login screen if pure admin access
+        return { type: 'ADMIN_LOGIN' };
     }
     return { type: isAppMode ? 'IDEAS' : 'LANDING' };
   });
@@ -95,7 +101,7 @@ const App: React.FC = () => {
   const [showroomMyProjects, setShowroomMyProjects] = useState(false);
 
   const { data: userInteractions } = useUserInteractions(session?.user?.id);
-  const favoriteIds = useMemo(() => Array.from(userInteractions?.favorites || []), [userInteractions]);
+  const favoriteIds = useMemo(() => Array.from(userInteractions?.favorites || []) as string[], [userInteractions]);
 
   const { data: showroomProjects, isLoading: showroomLoading } = useIdeas({
       onlyShowroom: true,
@@ -114,6 +120,7 @@ const App: React.FC = () => {
   const { data: userFeedbackVotes } = useUserFeedbackVotes(session?.user?.id);
 
   const voteMutation = useVoteIdea();
+  const feedbackVoteMutation = useVoteFeedback();
   const favMutation = useToggleFavorite();
   const improvementMutation = useAddImprovement();
   const joinMutation = useJoinInterest();
@@ -134,7 +141,7 @@ const App: React.FC = () => {
 
   const { data: fullIdeaData } = useIdeaDetail(selectedIdeaId || '');
 
-  // CHECK FOR ADMIN PERMISSIONS ON MOUNT
+  // CHECK FOR ADMIN PERMISSIONS
   const [canAccessAdmin, setCanAccessAdmin] = useState(false);
 
   useEffect(() => {
@@ -143,26 +150,44 @@ const App: React.FC = () => {
               const { data } = await supabase.from('profiles').select('is_admin').eq('id', session.user.id).single();
               setCanAccessAdmin(!!data?.is_admin);
               
-              // If on admin domain and is admin, ensure we are on admin view
-              if (isAdminDomain && data?.is_admin && viewState.type !== 'ADMIN') {
-                  setViewState({ type: 'ADMIN', subview: 'DASHBOARD' });
+              // Logic to direct flow when on admin domain
+              if (isAdminDomain) {
+                  if (data?.is_admin) {
+                      setViewState({ type: 'ADMIN', subview: 'DASHBOARD' });
+                  } else {
+                      // Logged in but not admin on admin domain? Force logout or show error
+                      // For now, let's just force ADMIN_LOGIN view which will show error if they try to log in again
+                      setViewState({ type: 'ADMIN_LOGIN' });
+                  }
               }
           } else {
               setCanAccessAdmin(false);
+              // If on admin domain and not logged in
+              if (isAdminDomain) {
+                  setViewState({ type: 'ADMIN_LOGIN' });
+              }
           }
       };
-      if (session) checkAdmin();
-  }, [session, isAdminDomain]);
+      
+      // Initial check when auth state resolves
+      if (!isAuthChecking) {
+          checkAdmin();
+      }
+  }, [session, isAdminDomain, isAuthChecking]);
 
 
   useEffect(() => {
       if (isAppMode && !isAuthChecking) {
           const protectedTypes = ['IDEAS', 'SHOWROOM', 'PROJECT_DETAIL', 'PROFILE', 'ROADMAP', 'ADMIN'];
-          if (!session && protectedTypes.includes(viewState.type)) {
+          // Admin Login is public (the form itself)
+          if (!session && protectedTypes.includes(viewState.type) && viewState.type !== 'ADMIN_LOGIN') {
               if (viewState.type !== 'IDEAS' && viewState.type !== 'SHOWROOM') {
-                  setViewState({ type: 'IDEAS' });
-                  // If on admin domain but not logged in, we might want to show auth modal
-                  if (isAdminDomain) setIsAuthModalOpen(true);
+                  // Fallback for app mode protection
+                  if (!isAdminDomain) {
+                     setViewState({ type: 'IDEAS' });
+                  } else {
+                     setViewState({ type: 'ADMIN_LOGIN' });
+                  }
               }
           }
       }
@@ -226,7 +251,8 @@ const App: React.FC = () => {
           if (isAppMode && viewState.type === 'LANDING' && !isAdminDomain) setViewState({ type: 'IDEAS' });
           fetchUserAvatar(session.user.id);
       } else {
-          if (!isAppMode) setViewState({ type: 'LANDING' });
+          if (!isAppMode && !isAdminDomain) setViewState({ type: 'LANDING' });
+          if (isAdminDomain) setViewState({ type: 'ADMIN_LOGIN' });
           setUserAvatar(null);
       }
     });
@@ -247,7 +273,8 @@ const App: React.FC = () => {
   const handleLogout = async () => {
       await supabase.auth.signOut();
       queryClient.clear();
-      if (!isAppMode) setViewState({ type: 'LANDING' });
+      if (!isAppMode && !isAdminDomain) setViewState({ type: 'LANDING' });
+      if (isAdminDomain) setViewState({ type: 'ADMIN_LOGIN' });
       setShowProfileMenu(false);
   };
 
@@ -436,19 +463,33 @@ const App: React.FC = () => {
       }
   };
 
-  // ADMIN ROUTE INTERCEPTION
+  // ADMIN LOGIN VIEW
+  if (viewState.type === 'ADMIN_LOGIN') {
+      return (
+          <AdminLogin onSuccess={() => setViewState({ type: 'ADMIN', subview: 'DASHBOARD' })} />
+      );
+  }
+
+  // ADMIN DASHBOARD VIEW
   if (viewState.type === 'ADMIN') {
       return (
           <AdminLayout 
              currentView={viewState.subview} 
              onNavigate={(subview) => setViewState({ type: 'ADMIN', subview })}
-             onExit={() => setViewState({ type: 'IDEAS' })}
+             onExit={() => {
+                // If exiting admin on admin domain, we just go back to login because there is no "public" app on admin domain
+                if (isAdminDomain) {
+                    setViewState({ type: 'ADMIN_LOGIN' });
+                } else {
+                    setViewState({ type: 'IDEAS' });
+                }
+             }}
              session={session}
           />
       );
   }
 
-  // PUBLIC LANDING
+  // PUBLIC LANDING (Only if not in app mode and not admin domain)
   if (!isAppMode && viewState.type === 'LANDING' && !isAdminDomain) {
     return (
       <>
@@ -462,7 +503,7 @@ const App: React.FC = () => {
     );
   }
 
-  // APP LAYOUT
+  // APP LAYOUT (Standard User Interface)
   return (
     <div className="min-h-screen bg-apple-bg font-sans text-apple-text selection:bg-apple-blue selection:text-white pb-20 flex flex-col">
       
@@ -479,7 +520,9 @@ const App: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
                 <span className="text-xl font-bold tracking-tight text-gray-900">Garagem</span>
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-[0.2em] mt-1">DE MICRO SAAS</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-[0.2em] mt-1">
+                    DE MICRO SAAS
+                </span>
             </div>
           </div>
 
@@ -568,7 +611,7 @@ const App: React.FC = () => {
                     </aside>
                     <div className="lg:col-span-3">
                         <div className="flex justify-between items-center mb-6"><span className="text-sm text-gray-500"><strong>{feedbacks?.length || 0}</strong> sugestões encontradas</span><div className="flex gap-2"><button onClick={() => setRoadmapFilter(p => ({...p, sort: 'votes'}))} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${roadmapFilter.sort === 'votes' ? 'bg-gray-100 text-black' : 'text-gray-400 hover:text-gray-600'}`}>Mais Votados</button><button onClick={() => setRoadmapFilter(p => ({...p, sort: 'recent'}))} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${roadmapFilter.sort === 'recent' ? 'bg-gray-100 text-black' : 'text-gray-400 hover:text-gray-600'}`}>Mais Recentes</button></div></div>
-                        {feedbacksLoading ? <IdeasListSkeleton /> : (<div className="grid gap-4">{feedbacks?.map(item => (<FeedbackCard key={item.id} feedback={item} onClick={(id) => setSelectedFeedbackId(id)} hasVoted={userFeedbackVotes?.has(item.id) || false} onVote={(e) => { e.stopPropagation(); if(requireAuth()) voteMutation.mutate({ideaId: 'IGNORE', userId: session.user.id}); }} />))}</div>)}
+                        {feedbacksLoading ? <IdeasListSkeleton /> : (<div className="grid gap-4">{feedbacks?.map((item: Feedback) => (<FeedbackCard key={item.id} feedback={item} onClick={(id) => setSelectedFeedbackId(id)} hasVoted={userFeedbackVotes?.has(item.id) || false} onVote={(e) => { e.stopPropagation(); if(requireAuth()) feedbackVoteMutation.mutate({feedbackId: item.id, userId: session.user.id, hasVoted: !!userFeedbackVotes?.has(item.id)}); }} />))}</div>)}
                     </div>
                 </div>
             </div>
@@ -615,10 +658,15 @@ const App: React.FC = () => {
       </main>
 
       <footer className="w-full bg-gray-50 border-t border-gray-100 py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center text-center gap-2">
-            <div className="flex items-center gap-2 text-gray-400"><AlertTriangle className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-wider">Sistema v1.0.3</span></div>
-            <p className="text-[10px] text-gray-500 max-w-md leading-relaxed">A Garagem está em fase inicial de desenvolvimento. Funcionalidades podem mudar e bugs podem ocorrer. Use com carinho e reporte problemas à comunidade.</p>
-            <p className="text-[10px] text-gray-400 mt-2">© 2024 Garagem de Micro SaaS. Todos os direitos reservados.</p>
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex flex-col gap-2">
+                 <div className="flex items-center gap-2 text-gray-400"><AlertTriangle className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-wider">Sistema v1.0.3</span></div>
+                 <p className="text-[10px] text-gray-500 max-w-md leading-relaxed">A Garagem está em fase inicial de desenvolvimento. Funcionalidades podem mudar e bugs podem ocorrer. Use com carinho e reporte problemas à comunidade.</p>
+                 <p className="text-[10px] text-gray-400 mt-2">© 2024 Garagem de Micro SaaS. Todos os direitos reservados.</p>
+            </div>
+            <a href={adminUrl} className="text-gray-300 hover:text-black transition-colors text-xs font-bold uppercase tracking-widest flex items-center gap-1">
+                <ShieldCheck className="w-4 h-4" /> Admin
+            </a>
         </div>
       </footer>
 

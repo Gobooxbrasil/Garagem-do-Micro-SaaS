@@ -1,4 +1,6 @@
 
+
+
 import React from 'react';
 import { 
   ArrowRight, 
@@ -19,6 +21,9 @@ interface LandingPageProps {
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn }) => {
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const adminUrl = 'https://admin.garagemdemicrosaas.com.br';
+
   return (
     <div className="min-h-screen bg-white font-sans text-apple-text selection:bg-apple-blue selection:text-white">
       
@@ -212,8 +217,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onLogin, isLoggedIn 
                 <p>© 2023 Garagem de Micro SaaS. Feito por Builders.</p>
                 <p className="text-xs text-gray-400 mt-1">Funcionalidades em teste. Use com moderação.</p>
             </div>
-            <div className="flex gap-6">
-                <a href="#" className="text-gray-400 hover:text-black transition-colors"><ShieldCheck className="w-5 h-5" /></a>
+            <div className="flex gap-6 items-center">
+                <a href={adminUrl} className="text-gray-300 hover:text-black transition-colors text-xs font-bold uppercase tracking-widest flex items-center gap-1">
+                     <ShieldCheck className="w-4 h-4" /> Admin
+                </a>
             </div>
         </div>
       </footer>

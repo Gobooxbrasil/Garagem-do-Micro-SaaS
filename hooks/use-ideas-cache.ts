@@ -1,4 +1,5 @@
 
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
 import { CACHE_KEYS } from '../lib/cache-keys';
@@ -158,9 +159,9 @@ export function useUserInteractions(userId: string | undefined) {
             ]);
 
             return {
-                votes: new Set(votes.data?.map((v: any) => v.idea_id)),
-                favorites: new Set(favs.data?.map((v: any) => v.idea_id)),
-                interests: new Set(interests.data?.map((v: any) => v.idea_id))
+                votes: new Set<string>(votes.data?.map((v: any) => v.idea_id)),
+                favorites: new Set<string>(favs.data?.map((v: any) => v.idea_id)),
+                interests: new Set<string>(interests.data?.map((v: any) => v.idea_id))
             };
         },
         enabled: !!userId,

@@ -1,4 +1,5 @@
 
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
 import { CACHE_KEYS } from '../lib/cache-keys';
@@ -13,7 +14,7 @@ interface FeedbackFilters {
 
 // LIST
 export function useFeedbackList(filters: FeedbackFilters) {
-  return useQuery({
+  return useQuery<Feedback[]>({
     queryKey: CACHE_KEYS.feedback.list(filters),
     queryFn: async () => {
       let query = supabase
@@ -41,10 +42,10 @@ export function useFeedbackList(filters: FeedbackFilters) {
       if (error) {
         console.error("Error fetching feedback:", error);
         // Fallback para tabela crua se a view não existir (evita crash total)
-        if (error.code === '42P01') return []; 
+        if (error.code === '42P01') return [] as Feedback[]; 
         throw error;
       }
-      return data as Feedback[];
+      return (data || []) as Feedback[];
     },
     ...CACHE_STRATEGIES.DYNAMIC
   });
@@ -175,7 +176,7 @@ export function useUserFeedbackVotes(userId: string | undefined) {
         queryFn: async () => {
             if (!userId) return new Set<string>();
             const { data } = await supabase.from('feedback_votes').select('feedback_id').eq('user_id', userId);
-            return new Set(data?.map((v: any) => v.feedback_id));
+            return new Set<string>(data?.map((v: any) => v.feedback_id));
         },
         enabled: !!userId
     });
