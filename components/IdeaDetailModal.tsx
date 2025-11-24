@@ -211,16 +211,18 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  if (!idea) return null;
-
-  // Combine showroom image and additional images into one gallery array, filtering out duplicates and empties
+  // MOVED useMemo HERE - Before the check
+  // Combine showroom image and additional images into one gallery array
   const galleryImages = React.useMemo(() => {
+      if (!idea) return [];
       const imgs = [
           idea.showroom_image,
           ...(idea.images || [])
       ].filter(img => img && img.length > 5); // Basic filter for valid strings
       return Array.from(new Set(imgs)); // Dedup
   }, [idea]);
+
+  if (!idea) return null;
 
   const hasImages = galleryImages.length > 0;
   const displayImage = galleryImages[0]; // Main cover is first image

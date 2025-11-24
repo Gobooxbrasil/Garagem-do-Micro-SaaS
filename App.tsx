@@ -54,7 +54,9 @@ import {
   ShieldCheck, 
   Check, 
   Trash2, 
-  MessageCircle
+  MessageCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const APP_DOMAIN = 'app.garagemdemicrosaas.com.br';
@@ -64,7 +66,6 @@ const App: React.FC = () => {
   const hostname = window.location.hostname;
   const isLandingDomain = hostname === MAIN_DOMAIN || hostname === `www.${MAIN_DOMAIN}`;
   const isAdminDomain = hostname.startsWith('admin.');
-  const isLocal = hostname.includes('localhost') || hostname.includes('127.0.0.1');
   const isAppMode = !isLandingDomain;
   
   // URL Admin absoluta conforme solicitado para evitar erros de rota relativa
@@ -96,6 +97,10 @@ const App: React.FC = () => {
   const [showMyIdeasOnly, setShowMyIdeasOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'votes' | 'newest'>('newest');
   const [ideasViewMode, setIdeasViewMode] = useState<'grid' | 'list'>('grid');
+
+  // -- PAGINATION STATE --
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // -- SHOWROOM HOOKS --
   const [showroomSearch, setShowroomSearch] = useState('');
@@ -162,21 +167,17 @@ const App: React.FC = () => {
                   if (data?.is_admin) {
                       setViewState({ type: 'ADMIN', subview: 'DASHBOARD' });
                   } else {
-                      // Logged in but not admin on admin domain? Force logout or show error
-                      // For now, let's just force ADMIN_LOGIN view which will show error if they try to log in again
                       setViewState({ type: 'ADMIN_LOGIN' });
                   }
               }
           } else {
               setCanAccessAdmin(false);
-              // If on admin domain and not logged in
               if (isAdminDomain) {
                   setViewState({ type: 'ADMIN_LOGIN' });
               }
           }
       };
       
-      // Initial check when auth state resolves
       if (!isAuthChecking) {
           checkAdmin();
       }
@@ -184,10 +185,8 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-      // Regra de proteção global: Se não estiver logado, força LANDING (ou ADMIN_LOGIN se for domínio admin)
       if (!isAuthChecking) {
           const protectedTypes = ['IDEAS', 'SHOWROOM', 'PROJECT_DETAIL', 'PROFILE', 'ROADMAP', 'ADMIN'];
-          // Se não tem sessão e tenta acessar rota protegida
           if (!session && protectedTypes.includes(viewState.type) && viewState.type !== 'ADMIN_LOGIN') {
               if (!isAdminDomain) {
                  setViewState({ type: 'LANDING' });
@@ -198,7 +197,6 @@ const App: React.FC = () => {
       }
   }, [viewState.type, session, isAuthChecking, isAdminDomain]);
 
-  // SECURITY CHECK EFFECT (BLOCK/DELETE ENFORCEMENT)
   useEffect(() => {
     const checkSecurityStatus = async () => {
         if (session?.user) {
@@ -208,7 +206,6 @@ const App: React.FC = () => {
                 .eq('id', session.user.id)
                 .single();
 
-            // Se perfil não existe (foi deletado) ou is_blocked é true
             if ((error && error.code === 'PGRST116') || profile?.is_blocked) {
                 await supabase.auth.signOut();
                 setSession(null);
@@ -226,18 +223,14 @@ const App: React.FC = () => {
         }
     };
 
-    // Check immediately on mount and whenever view state changes (navigation)
     if (session) {
         checkSecurityStatus();
-        // Poll every 15 seconds to enforce bans quickly
         const interval = setInterval(checkSecurityStatus, 15000);
         return () => clearInterval(interval);
     }
   }, [session, viewState.type, isAdminDomain]);
 
-  // REDIRECT ON LOGIN
   useEffect(() => {
-      // Se o usuário logar e estiver na Landing Page (e não estiver no domínio admin), redireciona para Ideias
       if (session && !isAuthChecking && viewState.type === 'LANDING' && !isAdminDomain) {
           setViewState({ type: 'IDEAS' });
       }
@@ -256,9 +249,9 @@ const App: React.FC = () => {
      if (!rawIdeas) return [];
      return rawIdeas.map(idea => ({
          ...idea,
-         hasVoted: userInteractions?.votes.has(idea.id) || false,
-         isFavorite: userInteractions?.favorites.has(idea.id) || false,
-         isInterested: userInteractions?.interests.has(idea.id) || false
+         hasVoted: userInteractions?.votes?.has(idea.id) || false,
+         isFavorite: userInteractions?.favorites?.has(idea.id) || false,
+         isInterested: userInteractions?.interests?.has(idea.id) || false
      }));
   }, [rawIdeas, userInteractions]);
 
@@ -266,9 +259,9 @@ const App: React.FC = () => {
     if (!showroomProjects) return [];
     return showroomProjects.map(p => ({
         ...p,
-        hasVoted: userInteractions?.votes.has(p.id) || false,
-        isFavorite: userInteractions?.favorites.has(p.id) || false,
-        isInterested: userInteractions?.interests.has(p.id) || false
+        hasVoted: userInteractions?.votes?.has(p.id) || false,
+        isFavorite: userInteractions?.favorites?.has(p.id) || false,
+        isInterested: userInteractions?.interests?.has(p.id) || false
     }));
   }, [showroomProjects, userInteractions]);
 
@@ -296,7 +289,6 @@ const App: React.FC = () => {
       if (session) {
           fetchUserAvatar(session.user.id);
       } else {
-          // Se deslogar, manda pra Landing
           if (!isAdminDomain) setViewState({ type: 'LANDING' });
           if (isAdminDomain) setViewState({ type: 'ADMIN_LOGIN' });
           setUserAvatar(null);
@@ -318,6 +310,11 @@ const App: React.FC = () => {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Reset Pagination on Filter Change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedNiche, showFavoritesOnly, showMyIdeasOnly, showMostVotedOnly, sortBy]);
 
   const handleLogout = async () => {
       await supabase.auth.signOut();
@@ -347,18 +344,12 @@ const App: React.FC = () => {
   };
 
   const handleNotificationClick = async (notification: Notification) => {
-      // 1. Marcar como lido
       if (!notification.read) {
           await markNotificationAsRead(notification.id);
       }
-
-      // 2. Navegar se tiver payload de ideia
       if (notification.payload?.idea_id) {
-          // Navega para a Ideia/Projeto
           setSelectedIdeaId(notification.payload.idea_id);
           prefetchIdeaDetail(notification.payload.idea_id);
-          
-          // Fecha dropdown após delay de 2s para feedback visual
           setTimeout(() => {
               setShowNotifications(false);
           }, 2000);
@@ -380,12 +371,9 @@ const App: React.FC = () => {
           setViewState({ type: 'IDEAS' });
           return;
       }
-
       if (isAppMode) {
-          // Se já está no app mas caiu na landing (não logado)
           setIsAuthModalOpen(true);
       } else {
-          // Se está no site institucional
           window.location.href = `https://${APP_DOMAIN}`;
       }
   };
@@ -530,6 +518,26 @@ const App: React.FC = () => {
     return result;
   }, [ideas, selectedNiche, sortBy, searchQuery, showFavoritesOnly, showMyIdeasOnly, showMostVotedOnly, session]);
 
+  // PAGINATION LOGIC
+  const totalPages = Math.ceil(filteredIdeas.length / itemsPerPage);
+  const paginatedIdeas = useMemo(() => {
+      const start = (currentPage - 1) * itemsPerPage;
+      return filteredIdeas.slice(start, start + itemsPerPage);
+  }, [filteredIdeas, currentPage, itemsPerPage]);
+
+  const getPageNumbers = () => {
+      const delta = 1;
+      const range = [];
+      for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
+          range.push(i);
+      }
+      if (currentPage - delta > 2) range.unshift('...');
+      if (currentPage + delta < totalPages - 1) range.push('...');
+      range.unshift(1);
+      if (totalPages > 1) range.push(totalPages);
+      return range;
+  };
+
   const promptDeleteIdea = (id: string) => {
       if (!requireAuth()) return;
       setIdeaToDelete(id);
@@ -549,21 +557,16 @@ const App: React.FC = () => {
       }
   };
 
-  // ADMIN LOGIN VIEW
   if (viewState.type === 'ADMIN_LOGIN') {
-      return (
-          <AdminLogin onSuccess={() => setViewState({ type: 'ADMIN', subview: 'DASHBOARD' })} />
-      );
+      return <AdminLogin onSuccess={() => setViewState({ type: 'ADMIN', subview: 'DASHBOARD' })} />;
   }
 
-  // ADMIN DASHBOARD VIEW
   if (viewState.type === 'ADMIN') {
       return (
           <AdminLayout 
              currentView={viewState.subview} 
              onNavigate={(subview) => setViewState({ type: 'ADMIN', subview })}
              onExit={() => {
-                // If exiting admin on admin domain, we just go back to login because there is no "public" app on admin domain
                 if (isAdminDomain) {
                     setViewState({ type: 'ADMIN_LOGIN' });
                 } else {
@@ -575,7 +578,6 @@ const App: React.FC = () => {
       );
   }
 
-  // PUBLIC LANDING (Ou se não estiver logado no App)
   if (viewState.type === 'LANDING' && !isAdminDomain) {
     return (
       <>
@@ -589,7 +591,6 @@ const App: React.FC = () => {
     );
   }
 
-  // APP LAYOUT (Standard User Interface - Protected)
   return (
     <div className="min-h-screen bg-apple-bg font-sans text-apple-text selection:bg-apple-blue selection:text-white pb-20 flex flex-col">
       
@@ -741,18 +742,100 @@ const App: React.FC = () => {
                         <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Pesquisar</h3><div className="relative group"><Search className="absolute left-4 top-3.5 w-4 h-4 text-gray-400 group-focus-within:text-apple-blue transition-colors" /><input type="text" placeholder="Palavras-chave..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl pl-11 pr-4 py-3 text-sm font-medium focus:ring-2 focus:ring-apple-blue/10 focus:border-apple-blue outline-none transition-all shadow-sm" /></div></div>
                         <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Filtros</h3><div className="space-y-2"><button onClick={() => { setShowMostVotedOnly(!showMostVotedOnly); setShowFavoritesOnly(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${showMostVotedOnly ? 'bg-orange-50 text-orange-600 shadow-sm border border-orange-100' : 'text-gray-600 hover:bg-gray-100'}`}><Flame className={`w-4 h-4 ${showMostVotedOnly ? 'fill-orange-600' : ''}`} /> Mais Votados</button><button onClick={() => { if(requireAuth()) { setShowFavoritesOnly(!showFavoritesOnly); setShowMostVotedOnly(false); } }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${showFavoritesOnly ? 'bg-red-50 text-red-600 shadow-sm border border-red-100' : 'text-gray-600 hover:bg-gray-100'}`}><Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-current' : ''}`} /> Meus Favoritos</button></div></div>
                         <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Meus Projetos</h3><button onClick={() => { if(requireAuth()) setShowMyIdeasOnly(!showMyIdeasOnly); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${showMyIdeasOnly ? 'bg-black text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" /> Minhas Publicações</button></div>
-                        <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Categorias</h3><div className="space-y-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">{niches.map(n => (<button key={n} onClick={() => setSelectedNiche(n)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${selectedNiche === n ? 'bg-white font-bold text-black shadow-sm border border-gray-100' : 'text-gray-500 font-medium hover:bg-gray-50 hover:text-gray-900'}`}>{n}</button>))}</div></div>
-                    </aside>
-                    <div className="lg:col-span-3">
-                        <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center justify-between mb-8 sticky top-20 z-30">
-                            <span className="text-sm text-gray-500 font-medium ml-4 hidden sm:inline-block">Mostrando <strong className="text-black">{filteredIdeas.length}</strong> resultados</span>
-                            <div className="flex items-center gap-2 ml-auto">
-                                <button onClick={() => setSortBy(prev => prev === 'newest' ? 'votes' : 'newest')} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 rounded-xl text-sm font-bold text-gray-600 transition-colors">{sortBy === 'newest' ? 'Mais Recentes' : 'Mais Votados'}<ChevronDown className="w-4 h-4 text-gray-400" /></button>
-                                <div className="h-6 w-px bg-gray-200 mx-2"></div>
-                                <div className="flex bg-gray-100/80 p-1 rounded-xl"><button onClick={() => setIdeasViewMode('grid')} className={`p-2 rounded-lg transition-all ${ideasViewMode === 'grid' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><LayoutGrid className="w-4 h-4" /></button><button onClick={() => setIdeasViewMode('list')} className={`p-2 rounded-lg transition-all ${ideasViewMode === 'list' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><ListIcon className="w-4 h-4" /></button></div>
+                        
+                        {/* Visualização & Ordenação */}
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Exibição</h3>
+                            
+                            {/* Contagem */}
+                            <div className="mb-3 text-xs text-gray-500 font-medium px-1">
+                                Encontrados: <strong className="text-apple-text">{filteredIdeas.length}</strong>
+                            </div>
+
+                            {/* Sort Switcher */}
+                            <div className="mb-3">
+                                 <button 
+                                    onClick={() => setSortBy(prev => prev === 'newest' ? 'votes' : 'newest')} 
+                                    className="w-full flex items-center justify-between bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all"
+                                >
+                                    <span>{sortBy === 'newest' ? 'Recentes' : 'Populares'}</span>
+                                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                                </button>
+                            </div>
+
+                            {/* Grid/List Switcher */}
+                            <div className="flex bg-gray-200/50 p-1 rounded-xl">
+                                <button onClick={() => setIdeasViewMode('grid')} className={`flex-1 p-2 rounded-lg transition-all flex items-center justify-center ${ideasViewMode === 'grid' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <LayoutGrid className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => setIdeasViewMode('list')} className={`flex-1 p-2 rounded-lg transition-all flex items-center justify-center ${ideasViewMode === 'list' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}>
+                                    <ListIcon className="w-4 h-4" />
+                                </button>
                             </div>
                         </div>
-                        {ideasLoading ? (<IdeasListSkeleton />) : (<div className={`grid gap-6 ${ideasViewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>{filteredIdeas.map((idea) => (<IdeaCard key={idea.id} idea={idea} onUpvote={handleUpvote} onToggleFavorite={handleToggleFavorite} onDelete={promptDeleteIdea} viewMode={ideasViewMode} onClick={(idea) => { setSelectedIdeaId(idea.id); prefetchIdeaDetail(idea.id); }} currentUserId={session?.user?.id} />))}</div>)}
+
+                        <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Categorias</h3><div className="space-y-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">{niches.map(n => (<button key={n} onClick={() => setSelectedNiche(n)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${selectedNiche === n ? 'bg-white font-bold text-black shadow-sm border border-gray-100' : 'text-gray-500 font-medium hover:bg-gray-50 hover:text-gray-900'}`}>{n}</button>))}</div></div>
+                    </aside>
+                    
+                    <div className="lg:col-span-3 flex flex-col min-h-[600px]">
+                        <div className="flex-grow">
+                            {ideasLoading ? (<IdeasListSkeleton />) : (<div className={`grid gap-6 ${ideasViewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>{paginatedIdeas.map((idea) => (<IdeaCard key={idea.id} idea={idea} onUpvote={handleUpvote} onToggleFavorite={handleToggleFavorite} onDelete={promptDeleteIdea} viewMode={ideasViewMode} onClick={(idea) => { setSelectedIdeaId(idea.id); prefetchIdeaDetail(idea.id); }} currentUserId={session?.user?.id} />))}</div>)}
+                        </div>
+
+                        {/* PAGINATION CONTROLS */}
+                        {totalPages > 1 && (
+                            <div className="flex flex-col md:flex-row justify-between items-center mt-12 pt-6 border-t border-gray-100 gap-4">
+                                <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    <span>Mostrar</span>
+                                    <select 
+                                        value={itemsPerPage}
+                                        onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                        className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 font-bold text-black focus:border-apple-blue outline-none cursor-pointer"
+                                    >
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                    </select>
+                                    <span>por página</span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    
+                                    {getPageNumbers().map((page, idx) => (
+                                        typeof page === 'number' ? (
+                                            <button 
+                                                key={idx}
+                                                onClick={() => setCurrentPage(page)}
+                                                className={`w-10 h-10 flex items-center justify-center rounded-lg text-sm font-bold transition-all ${
+                                                    currentPage === page 
+                                                    ? 'bg-apple-blue text-white shadow-md border border-apple-blue' 
+                                                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                {page}
+                                            </button>
+                                        ) : (
+                                            <span key={idx} className="w-10 h-10 flex items-center justify-center text-gray-400">...</span>
+                                        )
+                                    ))}
+
+                                    <button 
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-4 h-10 flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-bold"
+                                    >
+                                        Seguinte <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -785,7 +868,23 @@ const App: React.FC = () => {
 
       <NewIdeaModal isOpen={isIdeaModalOpen} onClose={() => setIsIdeaModalOpen(false)} onSave={handleAddIdea} />
       <NewProjectModal isOpen={isProjectModalOpen} onClose={() => { setIsProjectModalOpen(false); setEditingProject(null); }} onSave={handleSaveProject} initialData={editingProject} />
-      <IdeaDetailModal idea={activeIdea} currentUserId={session?.user?.id} currentUserData={{ name: session?.user?.user_metadata?.full_name || 'Usuário', avatar: userAvatar || undefined }} onClose={() => setSelectedIdeaId(null)} onUpvote={handleUpvote} onToggleFavorite={handleToggleFavorite} onRequestPdr={handleRequestPdr} onJoinTeam={handleInterested} onAddImprovement={handleAddImprovement} refreshData={() => queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(selectedIdeaId!) })} onPromoteIdea={handlePromoteIdea} />
+      
+      {selectedIdeaId && (
+          <IdeaDetailModal 
+            idea={activeIdea} 
+            currentUserId={session?.user?.id} 
+            currentUserData={{ name: session?.user?.user_metadata?.full_name || 'Usuário', avatar: userAvatar || undefined }} 
+            onClose={() => setSelectedIdeaId(null)} 
+            onUpvote={handleUpvote} 
+            onToggleFavorite={handleToggleFavorite} 
+            onRequestPdr={handleRequestPdr} 
+            onJoinTeam={handleInterested} 
+            onAddImprovement={handleAddImprovement} 
+            refreshData={() => queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(selectedIdeaId!) })} 
+            onPromoteIdea={handlePromoteIdea} 
+          />
+      )}
+
       <CreateFeedbackModal isOpen={isFeedbackModalOpen} onClose={() => setIsFeedbackModalOpen(false)} userId={session?.user?.id || ''} />
       <FeedbackDetailModal feedbackId={selectedFeedbackId} onClose={() => setSelectedFeedbackId(null)} userId={session?.user?.id || ''} userHasVoted={selectedFeedbackId ? userFeedbackVotes?.has(selectedFeedbackId) || false : false} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
