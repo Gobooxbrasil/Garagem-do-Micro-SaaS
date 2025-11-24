@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { SEED_IDEAS } from '../../lib/seed-ideas';
 import { useIdeas } from '../../hooks/use-ideas-cache';
-import { Search, Loader2, Trash2, Edit2, Plus, UploadCloud, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Search, Loader2, Trash2, Edit2, Plus, UploadCloud, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare } from 'lucide-react';
 import NewIdeaModal from '../NewIdeaModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,10 +18,56 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     const { data: ideas, isLoading } = useIdeas({ search });
     const queryClient = useQueryClient();
 
+    // States de Modal e Importação
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const [importStatus, setImportStatus] = useState<{total: number, success: number} | null>(null);
+
+    // States de Paginação e Seleção
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+    // Lógica de Paginação
+    const paginatedData = useMemo(() => {
+        if (!ideas) return [];
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return ideas.slice(startIndex, startIndex + itemsPerPage);
+    }, [ideas, currentPage, itemsPerPage]);
+
+    const totalPages = ideas ? Math.ceil(ideas.length / itemsPerPage) : 0;
+
+    // Resetar página ao pesquisar
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [search]);
+
+    // Handlers de Seleção
+    const handleSelectAll = () => {
+        if (paginatedData.every(idea => selectedIds.has(idea.id))) {
+            // Desmarcar todos da página atual
+            const newSelected = new Set(selectedIds);
+            paginatedData.forEach(idea => newSelected.delete(idea.id));
+            setSelectedIds(newSelected);
+        } else {
+            // Marcar todos da página atual
+            const newSelected = new Set(selectedIds);
+            paginatedData.forEach(idea => newSelected.add(idea.id));
+            setSelectedIds(newSelected);
+        }
+    };
+
+    const handleSelectOne = (id: string) => {
+        const newSelected = new Set(selectedIds);
+        if (newSelected.has(id)) {
+            newSelected.delete(id);
+        } else {
+            newSelected.add(id);
+        }
+        setSelectedIds(newSelected);
+    };
 
     const handleEdit = (idea: Idea) => {
         setEditingIdea(idea);
@@ -32,6 +78,35 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         if (confirm('Tem certeza que deseja excluir esta ideia permanentemente?')) {
             await supabase.from('ideas').delete().eq('id', id);
             queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        const count = selectedIds.size;
+        if (count === 0) return;
+
+        if (confirm(`Tem certeza que deseja excluir ${count} ideias selecionadas? Essa ação não pode ser desfeita.`)) {
+            setIsBulkDeleting(true);
+            try {
+                const { error } = await supabase
+                    .from('ideas')
+                    .delete()
+                    .in('id', Array.from(selectedIds));
+
+                if (error) throw error;
+
+                queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+                setSelectedIds(new Set());
+            } catch (error: any) {
+                alert('Erro ao excluir itens: ' + error.message);
+            } finally {
+                setIsBulkDeleting(false);
+            }
         }
     };
 
@@ -60,11 +135,8 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         if (!confirm(`Isso irá importar ${SEED_IDEAS.length} ideias do documento PDF original para o banco de dados. Continuar?`)) return;
         
         setIsImporting(true);
-        let successCount = 0;
-
-        // Batch processing
+        
         try {
-            // Preparar dados
             const rows = SEED_IDEAS.map(seed => ({
                 title: seed.title,
                 niche: seed.niche,
@@ -75,7 +147,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 target: seed.target,
                 sales_strategy: seed.sales_strategy,
                 pdr: seed.pdr,
-                user_id: session.user.id, // Admin é o dono
+                user_id: session.user.id,
                 votes_count: 0,
                 is_building: false,
                 created_at: new Date().toISOString(),
@@ -85,8 +157,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             const { error } = await supabase.from('ideas').insert(rows);
             
             if (error) throw error;
-            successCount = rows.length;
-            setImportStatus({ total: rows.length, success: successCount });
+            setImportStatus({ total: rows.length, success: rows.length });
             queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
 
         } catch (error: any) {
@@ -97,29 +168,41 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         }
     };
 
+    const isAllSelected = paginatedData.length > 0 && paginatedData.every(i => selectedIds.has(i.id));
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             
             {/* Header Actions */}
-            <div className="flex flex-col md:flex-row justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
-                <div className="relative w-full md:w-64">
+            <div className="flex flex-col xl:flex-row justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
+                <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                     <input 
                         type="text" 
-                        placeholder="Buscar ideia..." 
+                        placeholder="Buscar por título, dor ou solução..." 
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-zinc-900/10 outline-none"
                     />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                    {selectedIds.size > 0 && (
+                        <button 
+                            onClick={handleBulkDelete}
+                            disabled={isBulkDeleting}
+                            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
+                        >
+                            {isBulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            Apagar ({selectedIds.size})
+                        </button>
+                    )}
                     <button 
                         onClick={handleImportSeed}
                         disabled={isImporting}
                         className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                     >
                         {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                        Importar Seed (PDF)
+                        Importar Seed
                     </button>
                     <button 
                         onClick={() => { setEditingIdea(null); setIsModalOpen(true); }}
@@ -138,44 +221,103 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             )}
 
             {/* Table */}
-            <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-zinc-50 border-b border-zinc-200">
-                        <tr>
-                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Título</th>
-                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Nicho</th>
-                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Votos</th>
-                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-right">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                        {isLoading ? (
-                            <tr><td colSpan={4} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
-                        ) : ideas?.map((idea) => (
-                            <tr key={idea.id} className="hover:bg-zinc-50 transition-colors">
-                                <td className="px-6 py-4">
-                                    <p className="text-sm font-bold text-zinc-900">{idea.title}</p>
-                                    <p className="text-xs text-zinc-500 truncate max-w-[300px]">{idea.pain}</p>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className="bg-zinc-100 text-zinc-600 text-[10px] font-bold px-2 py-1 rounded uppercase">{idea.niche}</span>
-                                </td>
-                                <td className="px-6 py-4 text-sm font-mono text-zinc-600">
-                                    {idea.votes_count}
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                        <button onClick={() => handleEdit(idea)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
-                                        <button onClick={() => handleDelete(idea.id)} className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
-                                    </div>
-                                </td>
+            <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[800px]">
+                        <thead className="bg-zinc-50 border-b border-zinc-200">
+                            <tr>
+                                <th className="px-4 py-4 w-10">
+                                    <button onClick={handleSelectAll} className="text-zinc-400 hover:text-zinc-600 flex items-center justify-center">
+                                        {isAllSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                                    </button>
+                                </th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Título / Problema</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Nicho</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Status</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-right">Ações</th>
                             </tr>
-                        ))}
-                        {ideas?.length === 0 && (
-                            <tr><td colSpan={4} className="p-8 text-center text-zinc-400 text-sm">Nenhuma ideia encontrada. Use o botão importar.</td></tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                            {isLoading ? (
+                                <tr><td colSpan={5} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
+                            ) : paginatedData.map((idea) => {
+                                const isSelected = selectedIds.has(idea.id);
+                                return (
+                                    <tr key={idea.id} className={`transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-zinc-50'}`}>
+                                        <td className="px-4 py-4">
+                                            <button onClick={() => handleSelectOne(idea.id)} className={`flex items-center justify-center ${isSelected ? 'text-blue-600' : 'text-zinc-300 hover:text-zinc-500'}`}>
+                                                {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                                            </button>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <p className="text-sm font-bold text-zinc-900 line-clamp-1">{idea.title}</p>
+                                            <p className="text-xs text-zinc-500 truncate max-w-[350px]">{idea.pain}</p>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="bg-zinc-100 text-zinc-600 text-[10px] font-bold px-2 py-1 rounded uppercase whitespace-nowrap">{idea.niche}</span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="text-xs font-mono text-zinc-500 bg-zinc-100 px-1.5 rounded border border-zinc-200">
+                                                    Votes: {idea.votes_count}
+                                                </div>
+                                                {idea.is_showroom && <span className="w-2 h-2 rounded-full bg-purple-500" title="No Showroom"></span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button onClick={() => handleEdit(idea)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
+                                                <button onClick={() => handleDelete(idea.id)} className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {paginatedData.length === 0 && !isLoading && (
+                                <tr><td colSpan={5} className="p-8 text-center text-zinc-400 text-sm">Nenhuma ideia encontrada.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Footer Paginação */}
+                <div className="border-t border-zinc-200 p-4 flex flex-col sm:flex-row justify-between items-center gap-4 bg-zinc-50">
+                    <div className="flex items-center gap-2 text-sm text-zinc-500">
+                        <span>Mostrar</span>
+                        <select 
+                            value={itemsPerPage} 
+                            onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                            className="bg-white border border-zinc-300 rounded-lg text-xs py-1 px-2 focus:outline-none focus:border-zinc-500"
+                        >
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                        <span>por página</span>
+                        <span className="mx-2 text-zinc-300">|</span>
+                        <span>Total: {ideas?.length || 0}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 rounded-lg border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-medium text-zinc-700 px-2">
+                            Página {currentPage} de {totalPages || 1}
+                        </span>
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="p-2 rounded-lg border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <NewIdeaModal 
