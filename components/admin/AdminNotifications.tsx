@@ -48,7 +48,6 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
   
   // --- GLOBAL BANNER STATE ---
   const [globalAnnouncement, setGlobalAnnouncement] = useState('');
-  const [settingsId, setSettingsId] = useState<number | null>(null); // Armazena o ID da config
   const [loadingGlobal, setLoadingGlobal] = useState(false);
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [globalMsg, setGlobalMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -69,14 +68,13 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
     const loadSettings = async () => {
         setLoadingGlobal(true);
         try {
-            // Pega a primeira linha que encontrar (Singleton)
-            const { data } = await supabase.from('platform_settings').select('id, global_announcement').limit(1).single();
+            // Pega a primeira linha que encontrar
+            const { data } = await supabase.from('platform_settings').select('global_announcement').limit(1).single();
             if (data) {
                 setGlobalAnnouncement(data.global_announcement || '');
-                setSettingsId(data.id);
             }
         } catch (err) {
-            // Silent fail
+            // Silent fail if table is empty/missing
         } finally {
             setLoadingGlobal(false);
         }
@@ -112,35 +110,33 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
       setSavingGlobal(true);
       setGlobalMsg(null);
       try {
+          // Tenta encontrar o registro primeiro para saber se é Update ou Insert
+          const { data: existing } = await supabase.from('platform_settings').select('id').limit(1).maybeSingle();
+          
           let error;
-          if (settingsId) {
-              // Update existing
+          if (existing) {
               const res = await supabase
                 .from('platform_settings')
                 .update({ 
                     global_announcement: globalAnnouncement,
                     updated_at: new Date().toISOString() 
                 })
-                .eq('id', settingsId);
+                .eq('id', existing.id);
               error = res.error;
           } else {
-              // Insert new (should be handled by initial SQL but failsafe)
               const res = await supabase
                 .from('platform_settings')
                 .insert({ 
                     global_announcement: globalAnnouncement,
                     updated_at: new Date().toISOString() 
-                })
-                .select('id')
-                .single();
-              
-              if (res.data) setSettingsId(res.data.id);
+                });
               error = res.error;
           }
 
           if (error) throw error;
           setGlobalMsg({ type: 'success', text: 'Banner atualizado com sucesso!' });
       } catch (error: any) {
+          console.error("Erro Global:", error);
           setGlobalMsg({ type: 'error', text: 'Erro ao salvar: ' + error.message });
       } finally {
           setSavingGlobal(false);
@@ -151,12 +147,15 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
       setGlobalAnnouncement('');
       setSavingGlobal(true);
       try {
-          if (settingsId) {
-              await supabase.from('platform_settings').update({ global_announcement: '' }).eq('id', settingsId);
+          const { data: existing } = await supabase.from('platform_settings').select('id').limit(1).maybeSingle();
+          if (existing) {
+              const { error } = await supabase.from('platform_settings').update({ global_announcement: '' }).eq('id', existing.id);
+              if (error) throw error;
               setGlobalMsg({ type: 'success', text: 'Banner removido.' });
           }
-      } catch(e) {
+      } catch(e: any) {
           console.error(e);
+          setGlobalMsg({ type: 'error', text: 'Erro ao limpar: ' + e.message });
       } finally {
           setSavingGlobal(false);
       }
@@ -182,15 +181,16 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
           };
 
           if (targetType === 'specific') {
-              await supabase.from('notifications').insert({
+              const { error } = await supabase.from('notifications').insert({
                   recipient_id: selectedUser.id,
                   sender_id: session.user.id,
                   type: 'SYSTEM',
                   payload
               });
+              if (error) throw error;
               setPushStatus({ type: 'success', text: `Enviado para ${selectedUser.full_name}` });
           } else {
-              // BULK SEND STRATEGY (Client-side batching)
+              // BULK SEND STRATEGY
               const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
               
               if (count && count > 1000) {
@@ -206,10 +206,12 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
               let totalSent = 0;
 
               while (hasMore) {
-                  const { data: users } = await supabase
+                  const { data: users, error: fetchError } = await supabase
                     .from('profiles')
                     .select('id')
                     .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                  if (fetchError) throw fetchError;
 
                   if (!users || users.length === 0) {
                       hasMore = false;
@@ -223,8 +225,8 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
                       payload
                   }));
 
-                  const { error } = await supabase.from('notifications').insert(notifications);
-                  if (error) throw error;
+                  const { error: insertError } = await supabase.from('notifications').insert(notifications);
+                  if (insertError) throw insertError;
 
                   totalSent += users.length;
                   page++;
@@ -238,7 +240,8 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
           setPushLink('');
           
       } catch (error: any) {
-          setPushStatus({ type: 'error', text: 'Erro no envio: ' + error.message });
+          console.error("Erro Push:", error);
+          setPushStatus({ type: 'error', text: 'Erro no envio: ' + (error.message || error.details || 'Erro desconhecido') });
       } finally {
           setSendingPush(false);
       }

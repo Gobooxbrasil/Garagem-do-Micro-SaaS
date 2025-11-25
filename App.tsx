@@ -5,6 +5,8 @@
 
 
 
+
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType, Feedback, Notification } from './types';
@@ -198,7 +200,7 @@ const App: React.FC = () => {
       const fetchAnnouncement = async () => {
           try {
               // Pega o primeiro registro da tabela de configurações
-              const { data } = await supabase.from('platform_settings').select('global_announcement').limit(1).single();
+              const { data } = await supabase.from('platform_settings').select('global_announcement').limit(1).maybeSingle();
               if (data?.global_announcement) {
                   setGlobalAnnouncement(data.global_announcement);
               } else {
@@ -382,7 +384,7 @@ const App: React.FC = () => {
       
       // Handle External Links (Push Notifications)
       if (notification.payload?.link) {
-          window.open(notification.payload.link, notification.payload.link.startsWith('http') ? '_blank' : '_self');
+          window.open(notification.payload.link, '_blank'); // Open in new tab to be safe
           setShowNotifications(false);
           return;
       }
