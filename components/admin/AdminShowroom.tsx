@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useIdeas } from '../../hooks/use-ideas-cache';
-import { Search, Loader2, Trash2, Edit2, Plus, ExternalLink, Square, CheckSquare, Rocket, Target, Megaphone, Image as ImageIcon, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Search, Loader2, Trash2, Edit2, Plus, ExternalLink, Square, CheckSquare, Rocket, Target, Megaphone, Image as ImageIcon, ChevronLeft, ChevronRight, Pencil, User, Mail } from 'lucide-react';
 import NewProjectModal from '../NewProjectModal';
 import { BulkEditModal } from './BulkEditModal';
 import { Idea } from '../../types';
@@ -216,7 +216,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
             {/* Table */}
             <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[900px]">
+                    <table className="w-full text-left min-w-[1000px]">
                         <thead className="bg-zinc-50 border-b border-zinc-200">
                             <tr>
                                 <th className="px-4 py-4 w-10">
@@ -225,6 +225,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                                     </button>
                                 </th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Projeto</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Criador</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Objetivo</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Categoria</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Engajamento</th>
@@ -233,7 +234,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                             {isLoading ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
                             ) : paginatedData.map((project) => {
                                 const isSelected = selectedIds.has(project.id);
                                 const hasImage = project.showroom_image || (project.images && project.images[0]);
@@ -259,6 +260,28 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                                                     <a href={project.showroom_link} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 truncate max-w-[200px]">
                                                         {project.showroom_link || 'Sem link'} <ExternalLink className="w-3 h-3" />
                                                     </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden flex-shrink-0">
+                                                    {project.creator_avatar ? (
+                                                        <img src={project.creator_avatar} className="w-full h-full object-cover" alt={project.creator_name || 'User'} />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-zinc-400">
+                                                            <User className="w-4 h-4" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-zinc-900">{project.creator_name || 'Anônimo'}</span>
+                                                    <div className="flex items-center gap-1 text-xs text-zinc-500">
+                                                        <Mail className="w-3 h-3" />
+                                                        <span className="truncate max-w-[150px]" title={project.creator_email || project.user_id}>
+                                                            {project.creator_email || project.user_id?.substring(0, 8) + '...'}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -298,7 +321,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                                 );
                             })}
                             {paginatedData.length === 0 && !isLoading && (
-                                <tr><td colSpan={6} className="p-8 text-center text-zinc-400 text-sm">Nenhum projeto encontrado.</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-zinc-400 text-sm">Nenhum projeto encontrado.</td></tr>
                             )}
                         </tbody>
                     </table>
