@@ -16,13 +16,18 @@ import {
   CheckCircle,
   Lock,
   Unlock,
-  RefreshCw
+  RefreshCw,
+  User,
+  Search,
+  Plus,
+  X
 } from 'lucide-react';
 
 // Interface de Configurações
 interface PlatformSettings {
   site_name: string;
   maintenance_mode: boolean;
+  maintenance_allowed_users: string[]; // Array de UUIDs
   allow_signups: boolean;
   global_announcement: string;
   enable_showroom: boolean;
@@ -34,6 +39,7 @@ interface PlatformSettings {
 const DEFAULT_SETTINGS: PlatformSettings = {
   site_name: 'Garagem de Micro SaaS',
   maintenance_mode: false,
+  maintenance_allowed_users: [],
   allow_signups: true,
   global_announcement: '',
   enable_showroom: true,
@@ -65,6 +71,11 @@ const AdminSettings: React.FC = () => {
     const [msg, setMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
     
     const [settings, setSettings] = useState<PlatformSettings>(DEFAULT_SETTINGS);
+    
+    // States para busca de usuário (Whitelist)
+    const [userSearch, setUserSearch] = useState('');
+    const [foundUsers, setFoundUsers] = useState<any[]>([]);
+    const [richAllowedUsers, setRichAllowedUsers] = useState<any[]>([]); // Perfis completos dos IDs salvos
 
     // Load Settings (Simulated DB or LocalStorage for persistence demo)
     useEffect(() => {
@@ -75,7 +86,17 @@ const AdminSettings: React.FC = () => {
                 const { data, error } = await supabase.from('platform_settings').select('*').single();
                 
                 if (data) {
-                    setSettings(prev => ({ ...prev, ...data }));
+                    const loadedSettings = { ...DEFAULT_SETTINGS, ...data };
+                    setSettings(loadedSettings);
+                    
+                    // Carregar perfis completos da whitelist
+                    if (loadedSettings.maintenance_allowed_users && loadedSettings.maintenance_allowed_users.length > 0) {
+                        const { data: profiles } = await supabase
+                            .from('profiles')
+                            .select('id, full_name, email, avatar_url')
+                            .in('id', loadedSettings.maintenance_allowed_users);
+                        setRichAllowedUsers(profiles || []);
+                    }
                 } else {
                     // 2. Fallback para LocalStorage para simular persistência
                     const local = localStorage.getItem('gms_platform_settings');
@@ -92,9 +113,46 @@ const AdminSettings: React.FC = () => {
         loadSettings();
     }, []);
 
+    // Busca de usuários para adicionar à whitelist
+    useEffect(() => {
+        const searchUsers = async () => {
+            if (userSearch.length < 3) {
+                setFoundUsers([]);
+                return;
+            }
+            const { data } = await supabase
+              .from('profiles')
+              .select('id, full_name, email, avatar_url')
+              .or(`full_name.ilike.%${userSearch}%,email.ilike.%${userSearch}%`)
+              .limit(5);
+            
+            setFoundUsers(data || []);
+        };
+
+        const timeoutId = setTimeout(searchUsers, 500);
+        return () => clearTimeout(timeoutId);
+    }, [userSearch]);
+
     const handleChange = (field: keyof PlatformSettings, value: any) => {
         setSettings(prev => ({ ...prev, [field]: value }));
         setMsg(null); // Clear messages on edit
+    };
+
+    const handleAddAllowedUser = (user: any) => {
+        // Evita duplicatas
+        if (settings.maintenance_allowed_users.includes(user.id)) return;
+
+        const newList = [...(settings.maintenance_allowed_users || []), user.id];
+        setSettings(prev => ({ ...prev, maintenance_allowed_users: newList }));
+        setRichAllowedUsers(prev => [...prev, user]);
+        setUserSearch('');
+        setFoundUsers([]);
+    };
+
+    const handleRemoveAllowedUser = (userId: string) => {
+        const newList = settings.maintenance_allowed_users.filter(id => id !== userId);
+        setSettings(prev => ({ ...prev, maintenance_allowed_users: newList }));
+        setRichAllowedUsers(prev => prev.filter(u => u.id !== userId));
     };
 
     const handleSave = async () => {
@@ -217,10 +275,66 @@ const AdminSettings: React.FC = () => {
                                 checked={settings.maintenance_mode}
                                 onChange={(val) => handleChange('maintenance_mode', val)}
                             />
+                            
                             {settings.maintenance_mode && (
-                                <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg flex items-start gap-2 text-xs text-yellow-800">
-                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                    <p><strong>Cuidado:</strong> O Modo de Manutenção impedirá o acesso de todos os usuários exceto Admins.</p>
+                                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                                    <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg flex items-start gap-2 text-xs text-yellow-800">
+                                        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                        <p><strong>Cuidado:</strong> Apenas Administradores e usuários na lista de exceção abaixo terão acesso.</p>
+                                    </div>
+
+                                    {/* Whitelist UI */}
+                                    <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50">
+                                        <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Exceções (Usuários Permitidos)</label>
+                                        
+                                        {/* Search */}
+                                        <div className="relative mb-3">
+                                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+                                            <input 
+                                                type="text" 
+                                                value={userSearch}
+                                                onChange={(e) => setUserSearch(e.target.value)}
+                                                placeholder="Buscar usuário para liberar..." 
+                                                className="w-full bg-white border border-zinc-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-zinc-400"
+                                            />
+                                            {foundUsers.length > 0 && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg z-10 overflow-hidden">
+                                                    {foundUsers.map(u => (
+                                                        <button 
+                                                            key={u.id} 
+                                                            onClick={() => handleAddAllowedUser(u)}
+                                                            className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-50 flex items-center gap-2"
+                                                        >
+                                                            <Plus className="w-3 h-3 text-green-600" />
+                                                            <span className="font-bold text-zinc-800">{u.full_name}</span>
+                                                            <span className="text-zinc-400 text-xs truncate">({u.email})</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* List */}
+                                        <div className="space-y-2">
+                                            {richAllowedUsers.length === 0 ? (
+                                                <p className="text-xs text-zinc-400 italic text-center py-2">Nenhuma exceção configurada.</p>
+                                            ) : (
+                                                richAllowedUsers.map(user => (
+                                                    <div key={user.id} className="flex items-center justify-between bg-white border border-zinc-200 p-2 rounded-lg">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-zinc-100 overflow-hidden">
+                                                                {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : <User className="w-3 h-3 m-1.5 text-zinc-400" />}
+                                                            </div>
+                                                            <span className="text-sm font-medium text-zinc-700">{user.full_name}</span>
+                                                        </div>
+                                                        <button onClick={() => handleRemoveAllowedUser(user.id)} className="text-red-400 hover:text-red-600 p-1">
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
