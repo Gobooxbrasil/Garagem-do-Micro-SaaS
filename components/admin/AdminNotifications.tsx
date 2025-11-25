@@ -48,6 +48,7 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
   
   // --- GLOBAL BANNER STATE ---
   const [globalAnnouncement, setGlobalAnnouncement] = useState('');
+  const [settingsId, setSettingsId] = useState<number | null>(null); // Armazena o ID da config
   const [loadingGlobal, setLoadingGlobal] = useState(false);
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [globalMsg, setGlobalMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -68,10 +69,14 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
     const loadSettings = async () => {
         setLoadingGlobal(true);
         try {
-            const { data } = await supabase.from('platform_settings').select('global_announcement').single();
-            if (data) setGlobalAnnouncement(data.global_announcement || '');
+            // Pega a primeira linha que encontrar (Singleton)
+            const { data } = await supabase.from('platform_settings').select('id, global_announcement').limit(1).single();
+            if (data) {
+                setGlobalAnnouncement(data.global_announcement || '');
+                setSettingsId(data.id);
+            }
         } catch (err) {
-            // Silent fail if table doesn't exist (fallback to localStorage in AdminSettings handles app side)
+            // Silent fail
         } finally {
             setLoadingGlobal(false);
         }
@@ -107,14 +112,31 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
       setSavingGlobal(true);
       setGlobalMsg(null);
       try {
-          // Upsert para garantir que funciona mesmo sem registro inicial
-          const { error } = await supabase
-            .from('platform_settings')
-            .upsert({ 
-                id: 1,
-                global_announcement: globalAnnouncement,
-                updated_at: new Date().toISOString() 
-            });
+          let error;
+          if (settingsId) {
+              // Update existing
+              const res = await supabase
+                .from('platform_settings')
+                .update({ 
+                    global_announcement: globalAnnouncement,
+                    updated_at: new Date().toISOString() 
+                })
+                .eq('id', settingsId);
+              error = res.error;
+          } else {
+              // Insert new (should be handled by initial SQL but failsafe)
+              const res = await supabase
+                .from('platform_settings')
+                .insert({ 
+                    global_announcement: globalAnnouncement,
+                    updated_at: new Date().toISOString() 
+                })
+                .select('id')
+                .single();
+              
+              if (res.data) setSettingsId(res.data.id);
+              error = res.error;
+          }
 
           if (error) throw error;
           setGlobalMsg({ type: 'success', text: 'Banner atualizado com sucesso!' });
@@ -129,8 +151,10 @@ const AdminNotifications: React.FC<AdminNotificationsProps> = ({ session }) => {
       setGlobalAnnouncement('');
       setSavingGlobal(true);
       try {
-          await supabase.from('platform_settings').update({ global_announcement: '' }).eq('id', 1);
-          setGlobalMsg({ type: 'success', text: 'Banner removido.' });
+          if (settingsId) {
+              await supabase.from('platform_settings').update({ global_announcement: '' }).eq('id', settingsId);
+              setGlobalMsg({ type: 'success', text: 'Banner removido.' });
+          }
       } catch(e) {
           console.error(e);
       } finally {

@@ -3,6 +3,8 @@
 
 
 
+
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType, Feedback, Notification } from './types';
@@ -194,10 +196,16 @@ const App: React.FC = () => {
   // FETCH GLOBAL ANNOUNCEMENT
   useEffect(() => {
       const fetchAnnouncement = async () => {
-          const { data } = await supabase.from('platform_settings').select('global_announcement').single();
-          if (data?.global_announcement) {
-              setGlobalAnnouncement(data.global_announcement);
-          } else {
+          try {
+              // Pega o primeiro registro da tabela de configurações
+              const { data } = await supabase.from('platform_settings').select('global_announcement').limit(1).single();
+              if (data?.global_announcement) {
+                  setGlobalAnnouncement(data.global_announcement);
+              } else {
+                  setGlobalAnnouncement(null);
+              }
+          } catch (err) {
+              // Fail silently if table or row doesn't exist
               setGlobalAnnouncement(null);
           }
       };
@@ -372,7 +380,7 @@ const App: React.FC = () => {
           await markNotificationAsRead(notification.id);
       }
       
-      // Handle External Links
+      // Handle External Links (Push Notifications)
       if (notification.payload?.link) {
           window.open(notification.payload.link, notification.payload.link.startsWith('http') ? '_blank' : '_self');
           setShowNotifications(false);
