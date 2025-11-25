@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { AdminSubview } from '../../types';
@@ -15,7 +16,8 @@ import {
   Menu,
   X,
   ExternalLink,
-  ShieldAlert
+  ShieldAlert,
+  Bell
 } from 'lucide-react';
 import AdminDashboard from './AdminDashboard';
 import AdminUsers from './AdminUsers';
@@ -25,6 +27,7 @@ import AdminNPS from './AdminNPS';
 import AdminFeedback from './AdminFeedback';
 import AdminLogs from './AdminLogs';
 import AdminSettings from './AdminSettings';
+import AdminNotifications from './AdminNotifications';
 
 // Placeholders for other components
 const Placeholder = ({ title }: { title: string }) => (
@@ -75,6 +78,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ currentView, onNavigate, onEx
     { id: 'USERS' as AdminSubview, label: 'Usuários', icon: Users },
     { id: 'IDEAS' as AdminSubview, label: 'Ideias', icon: Lightbulb },
     { id: 'SHOWROOM' as AdminSubview, label: 'Showroom', icon: Rocket },
+    { id: 'NOTIFICATIONS' as AdminSubview, label: 'Notificações', icon: Bell },
     { id: 'NPS' as AdminSubview, label: 'Avaliações NPS', icon: Star },
     { id: 'FEEDBACK' as AdminSubview, label: 'Feedback', icon: MessageSquare },
     { id: 'LOGS' as AdminSubview, label: 'Logs do Sistema', icon: ClipboardList },
@@ -91,6 +95,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ currentView, onNavigate, onEx
           case 'FEEDBACK': return <AdminFeedback session={session} />;
           case 'LOGS': return <AdminLogs session={session} />;
           case 'SETTINGS': return <AdminSettings />;
+          case 'NOTIFICATIONS': return <AdminNotifications session={session} />;
           default: return <Placeholder title={menuItems.find(i => i.id === currentView)?.label || 'Admin'} />;
       }
   };

@@ -162,6 +162,7 @@ export interface Notification {
     user_avatar?: string;
     amount?: number;
     feedback_id?: string;
+    link?: string; // Support generic links
   };
 }
 
@@ -228,7 +229,7 @@ export interface NPSResponse {
   created_at?: string;
 }
 
-export type AdminSubview = 'DASHBOARD' | 'USERS' | 'IDEAS' | 'SHOWROOM' | 'NPS' | 'FEEDBACK' | 'LOGS' | 'SETTINGS';
+export type AdminSubview = 'DASHBOARD' | 'USERS' | 'IDEAS' | 'SHOWROOM' | 'NPS' | 'FEEDBACK' | 'LOGS' | 'SETTINGS' | 'NOTIFICATIONS';
 
 export type ViewState = 
   | { type: 'LANDING' }

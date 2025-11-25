@@ -1,4 +1,8 @@
 
+
+
+
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType, Feedback, Notification } from './types';
@@ -56,7 +60,8 @@ import {
   Trash2, 
   MessageCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Info
 } from 'lucide-react';
 
 const APP_DOMAIN = 'app.garagemdemicrosaas.com.br';
@@ -75,6 +80,9 @@ const App: React.FC = () => {
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   
+  // Global Announcement State
+  const [globalAnnouncement, setGlobalAnnouncement] = useState<string | null>(null);
+
   // Initialize ViewState based on Domain or Path
   const [viewState, setViewState] = useState<ViewState>(() => {
     if (isAdminDomain || window.location.pathname.startsWith('/admin')) {
@@ -182,6 +190,22 @@ const App: React.FC = () => {
           checkAdmin();
       }
   }, [session, isAdminDomain, isAuthChecking]);
+
+  // FETCH GLOBAL ANNOUNCEMENT
+  useEffect(() => {
+      const fetchAnnouncement = async () => {
+          const { data } = await supabase.from('platform_settings').select('global_announcement').single();
+          if (data?.global_announcement) {
+              setGlobalAnnouncement(data.global_announcement);
+          } else {
+              setGlobalAnnouncement(null);
+          }
+      };
+      fetchAnnouncement();
+      // Simple polling for announcement updates (every 2 mins)
+      const interval = setInterval(fetchAnnouncement, 120000);
+      return () => clearInterval(interval);
+  }, []);
 
 
   useEffect(() => {
@@ -347,12 +371,21 @@ const App: React.FC = () => {
       if (!notification.read) {
           await markNotificationAsRead(notification.id);
       }
+      
+      // Handle External Links
+      if (notification.payload?.link) {
+          window.open(notification.payload.link, notification.payload.link.startsWith('http') ? '_blank' : '_self');
+          setShowNotifications(false);
+          return;
+      }
+
+      // Handle Internal Ideas
       if (notification.payload?.idea_id) {
           setSelectedIdeaId(notification.payload.idea_id);
           prefetchIdeaDetail(notification.payload.idea_id);
           setTimeout(() => {
               setShowNotifications(false);
-          }, 2000);
+          }, 500);
       }
   };
 
@@ -603,6 +636,15 @@ const App: React.FC = () => {
       {session && <NPSModal userId={session.user.id} />}
 
       <nav className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-md border-b border-gray-200/50">
+        
+        {/* Global Announcement Banner */}
+        {globalAnnouncement && (
+            <div className="bg-indigo-600 text-white text-xs font-bold text-center py-2 px-4 relative z-50 flex items-center justify-center gap-2 animate-in slide-in-from-top-2">
+                <Info className="w-3.5 h-3.5" />
+                {globalAnnouncement}
+            </div>
+        )}
+
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setViewState({ type: 'IDEAS' })}>
             <div className="w-10 h-10 bg-black rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
@@ -661,6 +703,7 @@ const App: React.FC = () => {
                                             {!['NEW_VOTE', 'NEW_INTEREST', 'NEW_DONATION', 'SYSTEM', 'PIX_REQUEST', 'NEW_IMPROVEMENT'].includes(notif.type) && 'Nova interação.'}
                                          </p>
                                          {notif.type === 'PIX_REQUEST' && <span className="mt-2 text-xs bg-black text-white px-3 py-1 rounded-md inline-block">Configurar Pix</span>}
+                                         {notif.payload?.link && <span className="mt-2 text-[10px] text-blue-600 font-bold flex items-center gap-1"><Rocket className="w-3 h-3"/> Ver Link</span>}
                                      </div>
                                      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity self-center">
                                          {!notif.read && (
