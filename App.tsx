@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { ViewState, Idea, FeedbackType, FeedbackStatus, ShowroomFilters as ShowroomFiltersType, Feedback, Notification } from './types';
@@ -159,6 +150,8 @@ const App: React.FC = () => {
   
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  // Scroll Position Ref for UX preservation
+  const scrollPositionRef = useRef<number>(0);
   
   const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
@@ -279,6 +272,11 @@ const App: React.FC = () => {
       }
   }, []);
 
+  // Scroll to top on pagination change
+  useEffect(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentPage]);
+
   const ideas = useMemo<Idea[]>(() => {
      if (!rawIdeas) return [];
      return rawIdeas.map(idea => ({
@@ -377,6 +375,25 @@ const App: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id) });
   };
 
+  // Handlers for Opening/Closing Ideas with Scroll Preservation
+  const handleOpenIdea = (ideaId: string) => {
+      // Save current scroll position
+      scrollPositionRef.current = window.scrollY;
+      setSelectedIdeaId(ideaId);
+      prefetchIdeaDetail(ideaId);
+  };
+
+  const handleCloseIdea = () => {
+      setSelectedIdeaId(null);
+      // Restore scroll position after modal closes
+      setTimeout(() => {
+          window.scrollTo({
+              top: scrollPositionRef.current,
+              behavior: 'auto' // Instant jump to avoid disorientation
+          });
+      }, 0);
+  };
+
   const handleNotificationClick = async (notification: Notification) => {
       if (!notification.read) {
           await markNotificationAsRead(notification.id);
@@ -391,8 +408,7 @@ const App: React.FC = () => {
 
       // Handle Internal Ideas
       if (notification.payload?.idea_id) {
-          setSelectedIdeaId(notification.payload.idea_id);
-          prefetchIdeaDetail(notification.payload.idea_id);
+          handleOpenIdea(notification.payload.idea_id);
           setTimeout(() => {
               setShowNotifications(false);
           }, 500);
@@ -835,7 +851,7 @@ const App: React.FC = () => {
                     
                     <div className="lg:col-span-3 flex flex-col min-h-[600px]">
                         <div className="flex-grow">
-                            {ideasLoading ? (<IdeasListSkeleton />) : (<div className={`grid gap-6 ${ideasViewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>{paginatedIdeas.map((idea) => (<IdeaCard key={idea.id} idea={idea} onUpvote={handleUpvote} onToggleFavorite={handleToggleFavorite} onDelete={promptDeleteIdea} viewMode={ideasViewMode} onClick={(idea) => { setSelectedIdeaId(idea.id); prefetchIdeaDetail(idea.id); }} currentUserId={session?.user?.id} />))}</div>)}
+                            {ideasLoading ? (<IdeasListSkeleton />) : (<div className={`grid gap-6 ${ideasViewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>{paginatedIdeas.map((idea) => (<IdeaCard key={idea.id} idea={idea} onUpvote={handleUpvote} onToggleFavorite={handleToggleFavorite} onDelete={promptDeleteIdea} viewMode={ideasViewMode} onClick={(idea) => handleOpenIdea(idea.id)} currentUserId={session?.user?.id} />))}</div>)}
                         </div>
 
                         {/* PAGINATION CONTROLS */}
@@ -904,7 +920,7 @@ const App: React.FC = () => {
                     <button onClick={() => { if (requireAuth()) { setEditingProject(null); setIsProjectModalOpen(true); } }} className="bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-full font-medium shadow-lg shadow-black/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"><Plus className="w-5 h-5" /> Publicar Projeto</button>
                 </div>
                 <ShowroomFilters searchQuery={showroomSearch} setSearchQuery={setShowroomSearch} category={showroomCategory} setCategory={setShowroomCategory} viewMode={showroomViewMode} setViewMode={setShowroomViewMode} showFavorites={showroomShowFavs} setShowFavorites={setShowroomShowFavs} sortBy={showroomSort} setSortBy={setShowroomSort} myProjects={showroomMyProjects} setMyProjects={setShowroomMyProjects} requireAuth={requireAuth} />
-                {showroomLoading ? (<IdeasListSkeleton />) : hydratedShowroomProjects.length === 0 ? (<EmptyState onClearFilters={() => { setShowroomSearch(''); setShowroomCategory('Todos'); setShowroomShowFavs(false); setShowroomMyProjects(false); }} onNewProject={() => { if (requireAuth()) { setEditingProject(null); setIsProjectModalOpen(true); }}} />) : (<div className={`grid gap-6 ${showroomViewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>{hydratedShowroomProjects.map(project => ( showroomViewMode === 'grid' ? (<ShowroomCard key={project.id} project={project} onClick={(p) => { setSelectedIdeaId(p.id); prefetchIdeaDetail(p.id); }} onToggleFavorite={handleToggleFavorite} onVote={handleUpvote} />) : (<ShowroomListItem key={project.id} project={project} onClick={(p) => { setSelectedIdeaId(p.id); prefetchIdeaDetail(p.id); }} onToggleFavorite={handleToggleFavorite} onVote={handleUpvote} />) ))}</div>)}
+                {showroomLoading ? (<IdeasListSkeleton />) : hydratedShowroomProjects.length === 0 ? (<EmptyState onClearFilters={() => { setShowroomSearch(''); setShowroomCategory('Todos'); setShowroomShowFavs(false); setShowroomMyProjects(false); }} onNewProject={() => { if (requireAuth()) { setEditingProject(null); setIsProjectModalOpen(true); }}} />) : (<div className={`grid gap-6 ${showroomViewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>{hydratedShowroomProjects.map(project => ( showroomViewMode === 'grid' ? (<ShowroomCard key={project.id} project={project} onClick={(p) => handleOpenIdea(p.id)} onToggleFavorite={handleToggleFavorite} onVote={handleUpvote} />) : (<ShowroomListItem key={project.id} project={project} onClick={(p) => handleOpenIdea(p.id)} onToggleFavorite={handleToggleFavorite} onVote={handleUpvote} />) ))}</div>)}
             </>
         )}
       </main>
@@ -930,7 +946,7 @@ const App: React.FC = () => {
             idea={activeIdea} 
             currentUserId={session?.user?.id} 
             currentUserData={{ name: session?.user?.user_metadata?.full_name || 'Usuário', avatar: userAvatar || undefined }} 
-            onClose={() => setSelectedIdeaId(null)} 
+            onClose={handleCloseIdea} 
             onUpvote={handleUpvote} 
             onToggleFavorite={handleToggleFavorite} 
             onRequestPdr={handleRequestPdr} 
