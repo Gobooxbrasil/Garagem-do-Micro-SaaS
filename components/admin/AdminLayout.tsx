@@ -23,6 +23,7 @@ import AdminIdeas from './AdminIdeas';
 import AdminShowroom from './AdminShowroom';
 import AdminNPS from './AdminNPS';
 import AdminFeedback from './AdminFeedback';
+import AdminLogs from './AdminLogs';
 
 // Placeholders for other components
 const Placeholder = ({ title }: { title: string }) => (
@@ -87,6 +88,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ currentView, onNavigate, onEx
           case 'SHOWROOM': return <AdminShowroom session={session} />;
           case 'NPS': return <AdminNPS session={session} />;
           case 'FEEDBACK': return <AdminFeedback session={session} />;
+          case 'LOGS': return <AdminLogs session={session} />;
           default: return <Placeholder title={menuItems.find(i => i.id === currentView)?.label || 'Admin'} />;
       }
   };
