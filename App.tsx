@@ -420,6 +420,7 @@ const App: React.FC = () => {
       setShowMyIdeasOnly(true);
     } else {
         alert(`Erro: ${error.message}`);
+        throw error; // Throw so modal knows it failed
     }
   };
 
@@ -448,6 +449,7 @@ const App: React.FC = () => {
             }
         } else {
             alert(`Erro ao atualizar: ${error.message}`);
+            throw error;
         }
     } else {
         const { error } = await supabase.from('ideas').insert({
@@ -462,6 +464,7 @@ const App: React.FC = () => {
             setShowroomMyProjects(true);
         } else {
             alert(`Erro ao criar: ${error.message}`);
+            throw error;
         }
     }
   };

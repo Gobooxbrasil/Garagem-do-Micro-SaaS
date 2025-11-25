@@ -1,19 +1,18 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Idea } from '../types';
-import { X, Lightbulb, Upload, Trash2, AlertCircle, ChevronDown, Plus, Search, FileCode, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info, CheckCircle2, Youtube } from 'lucide-react';
+import { X, Lightbulb, Upload, Trash2, AlertCircle, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info, CheckCircle2, Youtube, Clipboard, FileCode, ExternalLink, Loader2 } from 'lucide-react';
 import { PRESET_NICHES } from '../constants';
 
 interface NewIdeaModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (idea: any) => void; 
+  onSave: (idea: any) => Promise<void> | void; 
   initialData?: Idea | null;
 }
 
 const MAX_IMAGES = 6;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
 // Componente Helper para Tooltips
 const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
@@ -31,6 +30,7 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
 const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -43,7 +43,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
     target: '',
     sales_strategy: '',
     pdr: '',
-    youtube_url: '', // Atualizado para youtube_url
+    youtube_url: '', // Form state uses youtube_url
     images: [] as string[],
     
     // Monetization
@@ -68,6 +68,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             target: initialData.target || '',
             sales_strategy: initialData.sales_strategy || '',
             pdr: initialData.pdr || '',
+            // Load from legacy or new field
             youtube_url: initialData.youtube_url || initialData.youtube_video_url || '',
             images: initialData.images || [],
             monetization_type: (initialData.monetization_type as any) || 'NONE',
@@ -87,8 +88,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (formData.monetization_type === 'PAID') {
         if (!formData.price || Number(formData.price) <= 0) {
             setError("Para vender o projeto, defina um valor válido.");
@@ -99,22 +102,81 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             return;
         }
     }
-    onSave({
+
+    setIsSubmitting(true);
+
+    // Prepare payload compatible with DB schema
+    const payload = {
         ...formData,
         id: initialData?.id,
-        price: formData.price ? Number(formData.price) : undefined,
+        price: formData.price ? Number(formData.price) : null,
         why_is_private: !!formData.why_is_private,
-        youtube_url: formData.youtube_url || null,
-        // Fallback para manter compatibilidade
-        youtube_video_url: formData.youtube_url || null 
-    });
-    onClose();
-    setError(null);
+        // Ensure we save to standard field
+        youtube_url: formData.youtube_url || null
+    };
+
+    try {
+        await onSave(payload);
+        onClose();
+    } catch (err: any) {
+        console.error(err);
+        // Error is typically alerted by the parent, but we set it here too just in case
+        setError(err.message || "Erro ao salvar. Verifique os dados e tente novamente.");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePaste = async (field: keyof typeof formData) => {
+    const inputs = document.getElementsByName(field as string);
+    const input = inputs.length > 0 ? (inputs[0] as HTMLInputElement | HTMLTextAreaElement) : null;
+    
+    if (input) input.focus();
+
+    try {
+      if (!navigator.clipboard?.readText) {
+        throw new Error('Clipboard API not supported');
+      }
+      
+      const text = await navigator.clipboard.readText();
+      if (text) {
+         setFormData(prev => ({ 
+             ...prev, 
+             [field]: (prev[field as keyof typeof prev] as string) + text 
+         }));
+      }
+    } catch (error) {
+      console.warn("Paste failed, user must paste manually.");
+      if (input) {
+          const originalPlaceholder = input.placeholder;
+          input.placeholder = "Pressione Ctrl+V para colar";
+          input.select(); 
+          setTimeout(() => {
+              input.placeholder = originalPlaceholder;
+          }, 3000);
+      }
+    }
+  };
+
+  const getYoutubeId = (url: string) => {
+      if (!url) return null;
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+        /youtube\.com\/embed\/([^&\n?#]+)/,
+        /youtube\.com\/v\/([^&\n?#]+)/,
+        /youtube\.com\/shorts\/([^&\n?#]+)/
+      ];
+      
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) return match[1];
+      }
+      return null;
   };
 
   const toggleHiddenField = (field: string) => {
@@ -132,7 +194,6 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
-    // Validate Limits
     if (formData.images.length >= MAX_IMAGES) {
         setError(`Limite de ${MAX_IMAGES} imagens atingido.`);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -141,7 +202,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
 
     const file = files[0];
     if (file.size > MAX_FILE_SIZE) {
-        setError('A imagem deve ter no máximo 5MB.');
+        setError('A imagem deve ter no máximo 2MB.');
         return;
     }
 
@@ -168,8 +229,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
       );
   };
 
-  const inputClass = "w-full bg-white border border-gray-200 rounded-xl p-3 text-apple-text focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all";
+  const inputClass = "w-full bg-white border border-gray-200 rounded-xl p-3 text-apple-text focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all pr-10"; 
   const labelClass = "block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wide flex items-center";
+
+  const videoId = getYoutubeId(formData.youtube_url);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-white/30 backdrop-blur-md animate-in fade-in duration-300">
@@ -193,7 +256,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
           <form id="ideaForm" onSubmit={handleSubmit} className="space-y-6">
             
             {error && (
-                <div className="bg-red-50 text-red-600 text-sm p-4 rounded-xl border border-red-100 flex items-center gap-3">
+                <div className="bg-red-50 text-red-600 text-sm p-4 rounded-xl border border-red-100 flex items-center gap-3 animate-in slide-in-from-top-2">
                     <AlertCircle className="w-5 h-5" /> {error}
                 </div>
             )}
@@ -201,7 +264,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className={labelClass}>Título da Ideia</label>
-                <input required name="title" value={formData.title} onChange={handleChange} className={inputClass} placeholder="Ex: Tinder para Adotar Pets" />
+                <div className="relative">
+                    <input required name="title" value={formData.title} onChange={handleChange} className={inputClass} placeholder="Ex: Tinder para Adotar Pets" />
+                    <button type="button" onClick={() => handlePaste('title')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-apple-blue transition-colors p-1" title="Colar"><Clipboard className="w-4 h-4" /></button>
+                </div>
               </div>
               <div>
                 <label className={labelClass}>Nicho / Mercado</label>
@@ -221,7 +287,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
                   </label>
                   {renderVisibilityToggle('pain')}
               </div>
-              <textarea required name="pain" value={formData.pain} onChange={handleChange} className={`${inputClass} h-24 resize-none`} placeholder="Descreva a dor que seu público sente..." />
+              <div className="relative">
+                  <textarea required name="pain" value={formData.pain} onChange={handleChange} className={`${inputClass} h-24 resize-none`} placeholder="Descreva a dor que seu público sente..." />
+                  <button type="button" onClick={() => handlePaste('pain')} className="absolute right-3 top-3 text-gray-400 hover:text-apple-blue transition-colors p-1" title="Colar"><Clipboard className="w-4 h-4" /></button>
+              </div>
             </div>
 
             {/* Solution */}
@@ -233,10 +302,13 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
                   </label>
                   {renderVisibilityToggle('solution')}
               </div>
-              <textarea required name="solution" value={formData.solution} onChange={handleChange} className={`${inputClass} h-24 resize-none`} placeholder="Como sua ideia resolve esse problema?" />
+              <div className="relative">
+                  <textarea required name="solution" value={formData.solution} onChange={handleChange} className={`${inputClass} h-24 resize-none`} placeholder="Como sua ideia resolve esse problema?" />
+                  <button type="button" onClick={() => handlePaste('solution')} className="absolute right-3 top-3 text-gray-400 hover:text-apple-blue transition-colors p-1" title="Colar"><Clipboard className="w-4 h-4" /></button>
+              </div>
             </div>
 
-            {/* Why - NEW FIELD */}
+            {/* Why */}
             <div>
               <div className="flex justify-between items-center mb-1">
                   <label className={labelClass}>
@@ -255,13 +327,16 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
                      </button>
                   </div>
               </div>
-              <textarea 
-                  name="why" 
-                  value={formData.why} 
-                  onChange={handleChange} 
-                  className={`${inputClass} h-24 resize-none ${formData.why_is_private ? 'bg-zinc-50 border-zinc-300' : ''}`} 
-                  placeholder="Explique o diferencial, a simplicidade ou o potencial de receita..." 
-              />
+              <div className="relative">
+                  <textarea 
+                      name="why" 
+                      value={formData.why} 
+                      onChange={handleChange} 
+                      className={`${inputClass} h-24 resize-none ${formData.why_is_private ? 'bg-zinc-50 border-zinc-300' : ''}`} 
+                      placeholder="Explique o diferencial, a simplicidade ou o potencial de receita..." 
+                  />
+                  <button type="button" onClick={() => handlePaste('why')} className="absolute right-3 top-3 text-gray-400 hover:text-apple-blue transition-colors p-1" title="Colar"><Clipboard className="w-4 h-4" /></button>
+              </div>
               {formData.why_is_private && <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1"><Lock className="w-3 h-3"/> Este campo ficará visível apenas para você.</p>}
             </div>
 
@@ -278,12 +353,47 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
 
             <div>
               <label className={labelClass}>Estratégia de Vendas</label>
-              <textarea required name="sales_strategy" value={formData.sales_strategy} onChange={handleChange} className={`${inputClass} h-20 resize-none`} placeholder="Como você vai conseguir os primeiros 10 clientes?" />
+              <div className="relative">
+                  <textarea required name="sales_strategy" value={formData.sales_strategy} onChange={handleChange} className={`${inputClass} h-20 resize-none`} placeholder="Como você vai conseguir os primeiros 10 clientes?" />
+                  <button type="button" onClick={() => handlePaste('sales_strategy')} className="absolute right-3 top-3 text-gray-400 hover:text-apple-blue transition-colors p-1" title="Colar"><Clipboard className="w-4 h-4" /></button>
+              </div>
             </div>
 
             <div>
                 <label className={labelClass}><Youtube className="w-3.5 h-3.5 mr-1.5 text-red-500" /> Vídeo Apresentação (Opcional)</label>
-                <input type="url" name="youtube_url" value={formData.youtube_url} onChange={handleChange} className={inputClass} placeholder="Link do vídeo no YouTube (Ex: Pitch da ideia)" />
+                <div className="relative">
+                    <input type="url" name="youtube_url" value={formData.youtube_url} onChange={handleChange} className={`${inputClass} pl-10`} placeholder="Link do vídeo no YouTube (Ex: Pitch da ideia)" />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"><Youtube className="w-4 h-4 text-gray-400" /></div>
+                    <button type="button" onClick={() => handlePaste('youtube_url')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-apple-blue transition-colors p-1" title="Colar"><Clipboard className="w-4 h-4" /></button>
+                </div>
+                
+                {/* Video Preview (THUMBNAIL ONLY to avoid Error 153 from embeds) */}
+                {videoId ? (
+                    <div className="mt-3 relative w-full rounded-xl overflow-hidden bg-black shadow-sm border border-gray-200 animate-in fade-in slide-in-from-top-2 group">
+                        <div className="aspect-video relative">
+                            <img 
+                                src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} 
+                                alt="YouTube Thumbnail" 
+                                className="w-full h-full object-cover opacity-90"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                                <div className="bg-red-600 text-white rounded-full p-3 shadow-lg">
+                                    <Youtube className="w-6 h-6 fill-white" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+                            <span className="flex items-center gap-1 text-green-600 font-bold"><CheckCircle2 className="w-3 h-3"/> Vídeo identificado com sucesso</span>
+                            <a href={`https://youtube.com/watch?v=${videoId}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-apple-blue hover:underline">
+                                Testar Link <ExternalLink className="w-3 h-3"/>
+                            </a>
+                        </div>
+                    </div>
+                ) : formData.youtube_url && (
+                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Link inválido ou não reconhecido. Use links do YouTube (watch, shorts, share).
+                    </p>
+                )}
             </div>
 
             <div>
@@ -294,7 +404,10 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
                   </label>
                   {renderVisibilityToggle('pdr')}
               </div>
-              <textarea name="pdr" value={formData.pdr} onChange={handleChange} className={`${inputClass} h-32 font-mono text-sm bg-slate-50`} placeholder="// Detalhes técnicos, stack sugerida, arquitetura..." />
+              <div className="relative">
+                  <textarea name="pdr" value={formData.pdr} onChange={handleChange} className={`${inputClass} h-32 font-mono text-sm bg-slate-50`} placeholder="// Detalhes técnicos, stack sugerida, arquitetura..." />
+                  <button type="button" onClick={() => handlePaste('pdr')} className="absolute right-3 top-3 text-gray-400 hover:text-apple-blue transition-colors p-1" title="Colar"><Clipboard className="w-4 h-4" /></button>
+              </div>
             </div>
 
             {/* Images */}
@@ -320,7 +433,7 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
-                    {formData.images.length >= MAX_IMAGES ? 'Limite de imagens atingido.' : 'PNG, JPG até 5MB'}
+                    {formData.images.length >= MAX_IMAGES ? 'Limite de imagens atingido.' : 'PNG, JPG até 2MB'}
                 </p>
             </div>
 
@@ -371,8 +484,9 @@ const NewIdeaModal: React.FC<NewIdeaModalProps> = ({ isOpen, onClose, onSave, in
 
         {/* Footer */}
         <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-3xl flex justify-end gap-4">
-          <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-600 hover:text-black font-medium transition-colors">Cancelar</button>
-          <button type="submit" form="ideaForm" className="bg-black hover:bg-gray-800 text-white font-medium py-2.5 px-8 rounded-full shadow-lg shadow-black/20 transition-all hover:scale-105">
+          <button type="button" onClick={onClose} disabled={isSubmitting} className="px-6 py-2.5 text-gray-600 hover:text-black font-medium transition-colors disabled:opacity-50">Cancelar</button>
+          <button type="submit" form="ideaForm" disabled={isSubmitting} className="bg-black hover:bg-gray-800 text-white font-medium py-2.5 px-8 rounded-full shadow-lg shadow-black/20 transition-all hover:scale-105 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2">
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {initialData ? 'Salvar Alterações' : 'Publicar Ideia'}
           </button>
         </div>

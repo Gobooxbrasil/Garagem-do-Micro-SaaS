@@ -1,29 +1,28 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useIdeas } from '../../hooks/use-ideas-cache';
-import { Search, Loader2, Trash2, Edit2, Plus, Upload, Download, CheckCircle, ChevronLeft, ChevronRight, Square, CheckSquare, FileSpreadsheet, AlertCircle, HelpCircle, Pencil, Youtube } from 'lucide-react';
-import NewIdeaModal from '../NewIdeaModal';
-import { CsvImportModal } from './CsvImportModal';
+import { Search, Loader2, Trash2, Edit2, Plus, ExternalLink, Square, CheckSquare, Rocket, Target, Megaphone, Image as ImageIcon, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import NewProjectModal from '../NewProjectModal';
 import { BulkEditModal } from './BulkEditModal';
 import { Idea } from '../../types';
 import { useQueryClient } from '@tanstack/react-query';
 import { CACHE_KEYS } from '../../lib/cache-keys';
 
-interface AdminIdeasProps {
+interface AdminShowroomProps {
     session: any;
 }
 
-const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
+const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
     const [search, setSearch] = useState('');
-    const { data: ideas, isLoading } = useIdeas({ search });
+    // Busca apenas itens do showroom
+    const { data: projects, isLoading } = useIdeas({ search, onlyShowroom: true });
     const queryClient = useQueryClient();
 
     // States de Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
-    const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
+    const [editingProject, setEditingProject] = useState<Idea | null>(null);
 
     // States de Paginação e Seleção
     const [currentPage, setCurrentPage] = useState(1);
@@ -34,25 +33,25 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
     // Lógica de Paginação
     const paginatedData = useMemo(() => {
-        if (!ideas) return [];
+        if (!projects) return [];
         const startIndex = (currentPage - 1) * itemsPerPage;
-        return ideas.slice(startIndex, startIndex + itemsPerPage);
-    }, [ideas, currentPage, itemsPerPage]);
+        return projects.slice(startIndex, startIndex + itemsPerPage);
+    }, [projects, currentPage, itemsPerPage]);
 
-    const totalPages = ideas ? Math.ceil(ideas.length / itemsPerPage) : 0;
+    const totalPages = projects ? Math.ceil(projects.length / itemsPerPage) : 0;
 
     React.useEffect(() => {
         setCurrentPage(1);
     }, [search]);
 
     const handleSelectAll = () => {
-        if (paginatedData.every(idea => selectedIds.has(idea.id))) {
+        if (paginatedData.every(p => selectedIds.has(p.id))) {
             const newSelected = new Set(selectedIds);
-            paginatedData.forEach(idea => newSelected.delete(idea.id));
+            paginatedData.forEach(p => newSelected.delete(p.id));
             setSelectedIds(newSelected);
         } else {
             const newSelected = new Set(selectedIds);
-            paginatedData.forEach(idea => newSelected.add(idea.id));
+            paginatedData.forEach(p => newSelected.add(p.id));
             setSelectedIds(newSelected);
         }
     };
@@ -67,16 +66,16 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         setSelectedIds(newSelected);
     };
 
-    const handleEdit = (idea: Idea) => {
-        setEditingIdea(idea);
+    const handleEdit = (project: Idea) => {
+        setEditingProject(project);
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id: string) => {
-        if (confirm('Tem certeza que deseja excluir esta ideia permanentemente?')) {
+        if (confirm('Tem certeza que deseja excluir este projeto do Showroom?')) {
             setIsDeleting(id);
             try {
-                // 1. Excluir relações manualmente (Manual Cascade)
+                // Cascade Delete Manual
                 await Promise.all([
                     supabase.from('idea_votes').delete().eq('idea_id', id),
                     supabase.from('idea_interested').delete().eq('idea_id', id),
@@ -87,9 +86,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     supabase.from('notifications').delete().match({ 'payload->idea_id': id })
                 ]);
 
-                // 2. Excluir a ideia principal
                 const { error } = await supabase.from('ideas').delete().eq('id', id);
-                
                 if (error) throw error;
 
                 queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
@@ -100,7 +97,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 });
             } catch (error: any) {
                 console.error("Erro ao excluir:", error);
-                alert('Erro ao excluir o projeto: ' + error.message);
+                alert('Erro ao excluir: ' + error.message);
             } finally {
                 setIsDeleting(null);
             }
@@ -112,30 +109,22 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
         if (count === 0) return;
         const ids = Array.from(selectedIds);
 
-        if (confirm(`Tem certeza que deseja excluir ${count} ideias selecionadas? Essa ação não pode ser desfeita.`)) {
+        if (confirm(`Tem certeza que deseja excluir ${count} projetos selecionados?`)) {
             setIsBulkDeleting(true);
             try {
                 await Promise.all([
                     supabase.from('idea_votes').delete().in('idea_id', ids),
                     supabase.from('idea_interested').delete().in('idea_id', ids),
-                    supabase.from('idea_improvements').delete().in('idea_id', ids),
-                    supabase.from('idea_transactions').delete().in('idea_id', ids),
                     supabase.from('favorites').delete().in('idea_id', ids),
                     supabase.from('reviews').delete().in('project_id', ids)
                 ]);
 
-                const { error } = await supabase
-                    .from('ideas')
-                    .delete()
-                    .in('id', ids);
-
+                const { error } = await supabase.from('ideas').delete().in('id', ids);
                 if (error) throw error;
 
                 queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
                 setSelectedIds(new Set());
-                alert(`${count} itens excluídos com sucesso.`);
             } catch (error: any) {
-                console.error("Erro bulk delete:", error);
                 alert('Erro ao excluir itens: ' + error.message);
             } finally {
                 setIsBulkDeleting(false);
@@ -156,42 +145,29 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
         queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
         setSelectedIds(new Set());
-        alert('Itens atualizados com sucesso!');
+        alert('Projetos atualizados com sucesso!');
     };
 
-    const handleSave = async (ideaData: any) => {
-        if (ideaData.id) {
-            const { error } = await supabase.from('ideas').update(ideaData).eq('id', ideaData.id);
+    const handleSave = async (projectData: any) => {
+        if (projectData.id) {
+            const { error } = await supabase.from('ideas').update(projectData).eq('id', projectData.id);
             if (error) alert('Erro ao atualizar: ' + error.message);
         } else {
             const { error } = await supabase.from('ideas').insert({
-                ...ideaData,
+                ...projectData,
                 user_id: session.user.id,
                 votes_count: 0,
-                is_building: false,
+                is_showroom: true,
                 short_id: Math.random().toString(36).substring(2, 8).toUpperCase()
             });
             if (error) alert('Erro ao criar: ' + error.message);
         }
         setIsModalOpen(false);
-        setEditingIdea(null);
+        setEditingProject(null);
         queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
     };
 
-    const handleDownloadTemplate = () => {
-        const headers = ["Titulo", "Nicho", "Dor", "Solucao", "Porque", "Modelo Preco", "Publico Alvo", "Estrategia Vendas", "PDR Tecnico", "Tipo Monetizacao", "Valor"];
-        const exampleRow = ["Exemplo de SaaS", "Produtividade", "Empresas perdem tempo...", "Um software que...", "Baixo custo...", "Assinatura Mensal", "Pequenas Empresas", "Ads", "React", "NONE", "0"];
-        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + exampleRow.map(field => `"${field}"`).join(",");
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "modelo_importacao_ideias.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const isAllSelected = paginatedData.length > 0 && paginatedData.every(i => selectedIds.has(i.id));
+    const isAllSelected = paginatedData.length > 0 && paginatedData.every(p => selectedIds.has(p.id));
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -202,7 +178,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                     <input 
                         type="text" 
-                        placeholder="Buscar por título ou ID curto..." 
+                        placeholder="Buscar projeto, nicho ou link..." 
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-zinc-900/10 outline-none"
@@ -229,27 +205,10 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     )}
                     
                     <button 
-                        onClick={handleDownloadTemplate}
-                        className="px-4 py-2 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
-                        title="Baixar modelo CSV"
-                    >
-                        <Download className="w-4 h-4" />
-                        Baixar Modelo
-                    </button>
-
-                    <button 
-                        onClick={() => setIsImportModalOpen(true)}
-                        className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
-                    >
-                        <FileSpreadsheet className="w-4 h-4" />
-                        Importar Planilha
-                    </button>
-
-                    <button 
-                        onClick={() => { setEditingIdea(null); setIsModalOpen(true); }}
+                        onClick={() => { setEditingProject(null); setIsModalOpen(true); }}
                         className="px-4 py-2 bg-zinc-900 hover:bg-black text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                     >
-                        <Plus className="w-4 h-4" /> Nova Ideia
+                        <Plus className="w-4 h-4" /> Novo Projeto
                     </button>
                 </div>
             </div>
@@ -257,7 +216,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
             {/* Table */}
             <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[800px]">
+                    <table className="w-full text-left min-w-[900px]">
                         <thead className="bg-zinc-50 border-b border-zinc-200">
                             <tr>
                                 <th className="px-4 py-4 w-10">
@@ -265,64 +224,73 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                                         {isAllSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                                     </button>
                                 </th>
-                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Título / ID</th>
-                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Nicho</th>
-                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Status</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Projeto</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Objetivo</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Categoria</th>
+                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Engajamento</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                             {isLoading ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
-                            ) : paginatedData.map((idea) => {
-                                const isSelected = selectedIds.has(idea.id);
-                                const hasVideo = idea.youtube_video_url || idea.youtube_url || idea.showroom_video_url;
-                                
+                                <tr><td colSpan={6} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
+                            ) : paginatedData.map((project) => {
+                                const isSelected = selectedIds.has(project.id);
+                                const hasImage = project.showroom_image || (project.images && project.images[0]);
+
                                 return (
-                                    <tr key={idea.id} className={`transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-zinc-50'}`}>
+                                    <tr key={project.id} className={`transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-zinc-50'}`}>
                                         <td className="px-4 py-4">
-                                            <button onClick={() => handleSelectOne(idea.id)} className={`flex items-center justify-center ${isSelected ? 'text-blue-600' : 'text-zinc-300 hover:text-zinc-500'}`}>
+                                            <button onClick={() => handleSelectOne(project.id)} className={`flex items-center justify-center ${isSelected ? 'text-blue-600' : 'text-zinc-300 hover:text-zinc-500'}`}>
                                                 {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                                             </button>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <p className="text-sm font-bold text-zinc-900 line-clamp-1">{idea.title}</p>
-                                                {hasVideo && (
-                                                    <a 
-                                                        href={hasVideo} 
-                                                        target="_blank" 
-                                                        rel="noreferrer" 
-                                                        className="text-red-500 hover:text-red-700 transition-colors bg-red-50 p-0.5 rounded"
-                                                        title="Vídeo Cadastrado (Clique para ver)"
-                                                    >
-                                                        <Youtube className="w-3.5 h-3.5" />
-                                                    </a>
-                                                )}
-                                            </div>
-                                            <p className="text-[10px] text-zinc-400 font-mono mb-1">ID: {idea.short_id || idea.id.substring(0,6)}</p>
-                                            <p className="text-xs text-zinc-500 truncate max-w-[300px]">{idea.pain}</p>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="bg-zinc-100 text-zinc-600 text-[10px] font-bold px-2 py-1 rounded uppercase whitespace-nowrap">{idea.niche}</span>
-                                        </td>
-                                        <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="text-xs font-mono text-zinc-500 bg-zinc-100 px-1.5 rounded border border-zinc-200">
-                                                    Votes: {idea.votes_count}
+                                                <div className="w-12 h-12 rounded-lg bg-zinc-100 border border-zinc-200 overflow-hidden flex-shrink-0 relative">
+                                                    {hasImage ? (
+                                                        <img src={hasImage} className="w-full h-full object-cover" alt="Capa" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-zinc-300"><Rocket className="w-5 h-5" /></div>
+                                                    )}
                                                 </div>
-                                                {idea.is_showroom && <span className="w-2 h-2 rounded-full bg-purple-500" title="No Showroom"></span>}
+                                                <div>
+                                                    <p className="text-sm font-bold text-zinc-900 line-clamp-1">{project.title}</p>
+                                                    <a href={project.showroom_link} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 truncate max-w-[200px]">
+                                                        {project.showroom_link || 'Sem link'} <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {project.showroom_objective === 'feedback' ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase border border-indigo-100">
+                                                    <Target className="w-3 h-3" /> Feedback
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase border border-emerald-100">
+                                                    <Megaphone className="w-3 h-3" /> Showcase
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="bg-zinc-100 text-zinc-600 text-[10px] font-bold px-2 py-1 rounded uppercase whitespace-nowrap">{project.niche}</span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-xs font-bold text-zinc-700">{project.votes_count} Votos</span>
+                                                <span className="text-[10px] text-zinc-400">{new Date(project.created_at).toLocaleDateString()}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => handleEdit(idea)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
+                                                <button onClick={() => handleEdit(project)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
                                                 <button 
-                                                    onClick={() => handleDelete(idea.id)} 
-                                                    disabled={isDeleting === idea.id}
+                                                    onClick={() => handleDelete(project.id)} 
+                                                    disabled={isDeleting === project.id}
                                                     className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                 >
-                                                    {isDeleting === idea.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4"/>}
+                                                    {isDeleting === project.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4"/>}
                                                 </button>
                                             </div>
                                         </td>
@@ -330,7 +298,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                                 );
                             })}
                             {paginatedData.length === 0 && !isLoading && (
-                                <tr><td colSpan={5} className="p-8 text-center text-zinc-400 text-sm">Nenhuma ideia encontrada.</td></tr>
+                                <tr><td colSpan={6} className="p-8 text-center text-zinc-400 text-sm">Nenhum projeto encontrado.</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -351,7 +319,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         </select>
                         <span>por página</span>
                         <span className="mx-2 text-zinc-300">|</span>
-                        <span>Total: {ideas?.length || 0}</span>
+                        <span>Total: {projects?.length || 0}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -376,23 +344,15 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 </div>
             </div>
 
-            <NewIdeaModal 
+            {/* Reutiliza NewProjectModal para edição completa do showroom */}
+            <NewProjectModal 
                 isOpen={isModalOpen} 
                 onClose={() => setIsModalOpen(false)} 
                 onSave={handleSave}
-                initialData={editingIdea}
+                initialData={editingProject}
             />
 
-            <CsvImportModal 
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-                onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
-                    alert('Importação concluída com sucesso!');
-                }}
-                userId={session.user.id}
-            />
-
+            {/* Reutiliza BulkEditModal (já suporta campos de showroom como imagem e monetização) */}
             <BulkEditModal 
                 isOpen={isBulkEditModalOpen}
                 onClose={() => setIsBulkEditModalOpen(false)}
@@ -403,4 +363,4 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     );
 };
 
-export default AdminIdeas;
+export default AdminShowroom;

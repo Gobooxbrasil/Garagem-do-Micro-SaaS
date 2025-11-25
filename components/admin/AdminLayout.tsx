@@ -20,6 +20,7 @@ import {
 import AdminDashboard from './AdminDashboard';
 import AdminUsers from './AdminUsers';
 import AdminIdeas from './AdminIdeas';
+import AdminShowroom from './AdminShowroom';
 
 // Placeholders for other components
 const Placeholder = ({ title }: { title: string }) => (
@@ -81,6 +82,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ currentView, onNavigate, onEx
           case 'DASHBOARD': return <AdminDashboard />;
           case 'USERS': return <AdminUsers session={session} />;
           case 'IDEAS': return <AdminIdeas session={session} />;
+          case 'SHOWROOM': return <AdminShowroom session={session} />;
           default: return <Placeholder title={menuItems.find(i => i.id === currentView)?.label || 'Admin'} />;
       }
   };

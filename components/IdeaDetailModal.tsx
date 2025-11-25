@@ -1,11 +1,11 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Idea, Improvement } from '../types';
 import ShareButton from './ShareButton';
 import RequestPixModal from './modals/RequestPixModal';
 import { PurchaseModal } from './modals/PurchaseModal';
 import { supabase } from '../lib/supabaseClient';
+import { YouTubePreview, getYouTubeVideoId } from './YouTubePreview'; // Importação centralizada
 import { 
   X, 
   AlertCircle, 
@@ -54,7 +54,8 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
-  Maximize2
+  Maximize2,
+  Play
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
@@ -104,14 +105,6 @@ const getNicheVisuals = (niche: string) => {
     if (n.includes('turism') || n.includes('viage')) return { icon: Plane, bg: 'bg-blue-50', text: 'text-blue-500' };
     return { icon: Lightbulb, bg: 'bg-gray-100', text: 'text-gray-500' };
 }
-
-const getYoutubeId = (url: string | undefined) => {
-    if (!url) return null;
-    // Regex suportando Shorts, Embed, Watch, etc.
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-};
 
 const CommentThread: React.FC<{ 
     comment: Improvement, 
@@ -201,6 +194,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const [newImprovement, setNewImprovement] = useState('');
   const [submittingImprovement, setSubmittingImprovement] = useState(false);
   const [pdrCopied, setPdrCopied] = useState(false);
+  const [showDemoData, setShowDemoData] = useState(false);
 
   // Payment States
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -213,7 +207,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // MOVED useMemo HERE - Before the check
   // Combine showroom image and additional images into one gallery array
   const galleryImages = React.useMemo(() => {
       if (!idea) return [];
@@ -232,11 +225,9 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   const isUnlocked = idea?.user_id === currentUserId || 
                      idea?.idea_transactions?.some(t => t.user_id === currentUserId && t.status === 'confirmed' && t.transaction_type === 'purchase');
 
-  // Logica segura para URL de video: Prioriza Showroom se for projeto de showroom
-  const rawVideoUrl = idea.is_showroom 
-      ? (idea.showroom_video_url || idea.youtube_video_url || idea.youtube_url) 
-      : (idea.youtube_url || idea.youtube_video_url || idea.showroom_video_url);
-  const youtubeId = getYoutubeId(rawVideoUrl);
+  // Priority: 1) New standard field, 2) Showroom, 3) Legacy
+  const rawVideoUrl = idea.youtube_url || idea.showroom_video_url || idea.youtube_video_url;
+  const youtubeId = getYouTubeVideoId(rawVideoUrl || '');
 
   const visuals = getNicheVisuals(idea.niche);
   const VisualIcon = visuals.icon;
@@ -349,6 +340,12 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
       setCurrentImageIndex((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
   };
 
+  const openVideo = () => {
+      if(youtubeId) {
+          window.open(`https://www.youtube.com/watch?v=${youtubeId}`, '_blank');
+      }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/30 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh] border border-gray-200/50 relative overflow-hidden">
@@ -411,9 +408,32 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                     </div>
                  </div>
 
-                 {/* Gallery Thumbnails Strip (Optional quick view) */}
-                 {galleryImages.length > 1 && (
+                 {/* Gallery Thumbnails Strip & Video Card */}
+                 {(galleryImages.length > 0 || youtubeId) && (
                      <div className="flex gap-3 overflow-x-auto pb-4 mb-6 custom-scrollbar">
+                         
+                         {youtubeId && (
+                             <div 
+                                onClick={openVideo}
+                                className="h-20 w-28 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-80 transition-all relative bg-black group shadow-sm hover:shadow-md"
+                                title="Assistir Vídeo (Abre em nova janela)"
+                             >
+                                 <img 
+                                    src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`} 
+                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition-opacity"
+                                    alt="Video Thumbnail"
+                                 />
+                                 <div className="absolute inset-0 flex items-center justify-center">
+                                     <div className="w-8 h-8 bg-red-600/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                                         <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                                     </div>
+                                 </div>
+                                 <div className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-sm text-white text-[7px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border border-white/10 flex items-center gap-1">
+                                     <ExternalLink className="w-2 h-2" /> Vídeo
+                                 </div>
+                             </div>
+                         )}
+
                          {galleryImages.map((img, idx) => (
                              <div 
                                 key={idx} 
@@ -428,26 +448,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                                  )}
                              </div>
                          ))}
-                     </div>
-                 )}
-
-                 {youtubeId && (
-                     <div className="mb-10 animate-in fade-in slide-in-from-bottom-4">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Youtube className="w-5 h-5 text-red-600" />
-                            <h3 className="text-lg font-bold text-gray-900">Apresentação em Vídeo</h3>
-                        </div>
-                        <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-lg border border-gray-100">
-                             <iframe 
-                                width="100%" 
-                                height="100%" 
-                                src={`https://www.youtube.com/embed/${youtubeId}`} 
-                                title="YouTube video player" 
-                                frameBorder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                allowFullScreen
-                             ></iframe>
-                        </div>
                      </div>
                  )}
 
@@ -492,6 +492,16 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                                         )}
                                     </div>
                                  </>
+                             )}
+                             
+                             {/* VIDEO APRESENTAÇÃO */}
+                             {youtubeId && (
+                                 <div className="mt-6">
+                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                         <Youtube className="w-4 h-4 text-red-500" /> Apresentação em Vídeo
+                                     </h3>
+                                     <YouTubePreview url={rawVideoUrl} />
+                                 </div>
                              )}
                          </div>
 
@@ -556,6 +566,48 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                                 <button onClick={handleJoin} disabled={idea.isInterested} className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 border transition-all ${idea.isInterested ? 'bg-amber-100 text-amber-700 border-amber-200 cursor-default' : 'bg-amber-400 hover:bg-amber-500 text-white border-amber-400 shadow-lg shadow-amber-500/20'}`}>{idea.isInterested ? (<><CheckCircle className="w-4 h-4" /> Interesse Enviado</>) : (<><Star className="w-4 h-4" /> Tenho Interesse</>)}</button>
                              </div>
                          </div>
+
+                         {/* Demo Credentials Box */}
+                         {idea.demo_email && (
+                             <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm animate-in fade-in slide-in-from-right hover:shadow-md hover:border-blue-300 transition-all duration-300">
+                                 <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                                     <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                         <Lock className="w-3 h-3" /> Dados de Acesso (Demo)
+                                     </h4>
+                                     <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-mono">Teste Agora</span>
+                                 </div>
+                                 <div className="space-y-2">
+                                     <div className="flex flex-col gap-1">
+                                         <span className="text-[10px] font-bold text-gray-400 uppercase">Email</span>
+                                         <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 group hover:border-apple-blue/30 transition-all cursor-pointer active:scale-95" onClick={() => navigator.clipboard.writeText(idea.demo_email!)} title="Clique para copiar">
+                                             <span className="text-sm font-mono text-gray-700 flex-grow truncate">{idea.demo_email}</span>
+                                             <Copy className="w-3 h-3 text-gray-400 group-hover:text-apple-blue" />
+                                         </div>
+                                     </div>
+                                     <div className="flex flex-col gap-1 relative">
+                                         <span className="text-[10px] font-bold text-gray-400 uppercase">Senha</span>
+                                         <div className={`flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 group hover:border-apple-blue/30 transition-all cursor-pointer active:scale-95 relative ${!showDemoData ? 'select-none' : ''}`} onClick={() => showDemoData && navigator.clipboard.writeText(idea.demo_password!)} title={showDemoData ? "Clique para copiar" : "Revele primeiro"}>
+                                             <span className={`text-sm font-mono text-gray-700 flex-grow truncate ${!showDemoData ? 'blur-sm opacity-50' : ''}`}>
+                                                 {idea.demo_password}
+                                             </span>
+                                             {showDemoData && <Copy className="w-3 h-3 text-gray-400 group-hover:text-apple-blue" />}
+                                         </div>
+                                         
+                                         {!showDemoData && (
+                                             <div className="absolute top-6 inset-x-0 flex items-center justify-center">
+                                                 <button 
+                                                    onClick={() => setShowDemoData(true)}
+                                                    className="bg-white text-gray-800 text-xs font-bold px-3 py-1 rounded-full shadow-md border border-gray-200 hover:bg-gray-50 transition-all hover:scale-105"
+                                                 >
+                                                     Revelar
+                                                 </button>
+                                             </div>
+                                         )}
+                                     </div>
+                                 </div>
+                             </div>
+                         )}
+
                          {(supporters.length > 0 || buyers.length > 0) && (<div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm"><h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2"><Users className="w-4 h-4" /> Comunidade Apoiadora</h4><div className="space-y-4">{buyers.map(t => (<div key={t.id} className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 border border-green-200">{t.profiles?.avatar_url ? <img src={t.profiles.avatar_url} className="w-full h-full rounded-full object-cover"/> : <DollarSign className="w-4 h-4" />}</div><div><p className="text-xs font-bold text-gray-800">{t.profiles?.full_name}</p><p className="text-[10px] text-green-600 font-semibold bg-green-50 px-1.5 py-0.5 rounded inline-block">Comprador</p></div></div>))}{supporters.map(t => (<div key={t.id} className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border border-blue-200">{t.profiles?.avatar_url ? <img src={t.profiles.avatar_url} className="w-full h-full rounded-full object-cover"/> : <Gift className="w-4 h-4" />}</div><div><p className="text-xs font-bold text-gray-800">{t.profiles?.full_name}</p><p className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded inline-block">Apoiador</p></div></div>))}</div></div>)}
 
                          <div className="border-t border-gray-100 pt-6 space-y-4">

@@ -32,9 +32,9 @@ export function useIdeas(filters?: ShowroomFilters & { userId?: string, favorite
       // Busca (Search)
       if (filters?.search) {
         if (filters.onlyShowroom) {
-             query = query.or(`title.ilike.%${filters.search}%,showroom_description.ilike.%${filters.search}%`);
+             query = query.or(`title.ilike.%${filters.search}%,showroom_description.ilike.%${filters.search}%,short_id.ilike.%${filters.search}%`);
         } else {
-             query = query.or(`title.ilike.%${filters.search}%,pain.ilike.%${filters.search}%,solution.ilike.%${filters.search}%`);
+             query = query.or(`title.ilike.%${filters.search}%,pain.ilike.%${filters.search}%,solution.ilike.%${filters.search}%,short_id.ilike.%${filters.search}%`);
         }
       }
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Trash2, AlertCircle, Rocket, Youtube, Target, Megaphone, CheckSquare, Square } from 'lucide-react';
+import { X, Upload, Trash2, AlertCircle, Rocket, Youtube, Target, Megaphone, CheckSquare, Square, Mail, Key } from 'lucide-react';
 import { Idea } from '../types';
 
 interface NewProjectModalProps {
@@ -29,7 +29,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
     solution: '', 
     tech_stack: '', 
     
-    // Auth/Demo 
+    // Auth/Demo Credentials (Exigido update no SQL: ALTER TABLE ideas ADD COLUMN demo_email TEXT...)
     demo_email: '',
     demo_password: '',
   });
@@ -94,8 +94,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
         
         // Only override PDR if creating new or if explicit
         pdr: formData.tech_stack || initialData?.pdr,
-        
-        // Demo Info
+
+        // Demo Credentials Payload
         demo_email: formData.demo_email,
         demo_password: formData.demo_password
     };
@@ -128,7 +128,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
   };
 
   const inputClass = "w-full bg-white border border-gray-200 rounded-xl p-3 text-apple-text focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20 outline-none transition-all";
-  const labelClass = "block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wide";
+  const labelClass = "block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wide flex items-center gap-1.5";
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-white/30 backdrop-blur-md animate-in fade-in duration-300">
@@ -294,11 +294,11 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, onSa
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className={labelClass}>Email de Demo (Opcional)</label>
+                        <label className={labelClass}><Mail className="w-3.5 h-3.5" /> Email de Demo (Opcional)</label>
                         <input name="demo_email" value={formData.demo_email} onChange={handleChange} className={inputClass} placeholder="usuario@demo.com" />
                       </div>
                       <div>
-                        <label className={labelClass}>Senha de Demo (Opcional)</label>
+                        <label className={labelClass}><Key className="w-3.5 h-3.5" /> Senha de Demo (Opcional)</label>
                         <input name="demo_password" value={formData.demo_password} onChange={handleChange} className={inputClass} placeholder="123456" />
                       </div>
                   </div>

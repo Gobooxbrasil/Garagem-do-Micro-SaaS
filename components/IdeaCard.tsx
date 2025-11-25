@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Idea } from '../types';
 import ShareButton from './ShareButton';
+import { YouTubePreview, getYouTubeVideoId } from './YouTubePreview';
 import { 
   Heart,
   Flame,
@@ -26,7 +27,8 @@ import {
   User,
   Youtube,
   Play,
-  X
+  X,
+  Video
 } from 'lucide-react';
 
 interface IdeaCardProps {
@@ -38,14 +40,6 @@ interface IdeaCardProps {
   onClick: (idea: Idea) => void;
   currentUserId?: string;
 }
-
-// Helper para extrair ID do Youtube
-const getYoutubeId = (url: string | undefined) => {
-    if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length >= 10) ? match[2] : null;
-};
 
 // Visual Identity Helper
 export const getNicheVisuals = (niche: string) => {
@@ -80,10 +74,14 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const isOwner = currentUserId && idea.user_id === currentUserId;
   const hasVotes = idea.votes_count > 0;
   
-  const [isPlaying, setIsPlaying] = useState(false);
-  // Update logic to prioritize youtube_url, then fallbacks
-  const videoUrl = idea.youtube_url || idea.youtube_video_url || idea.showroom_video_url;
-  const videoId = getYoutubeId(videoUrl);
+  // LÓGICA DE PRIORIDADE DO VÍDEO
+  // 1) Novo padrão unificado (youtube_url)
+  // 2) Legado do Showroom (showroom_video_url)
+  // 3) Legado das Ideias (youtube_video_url)
+  const videoUrl = idea.youtube_url || idea.showroom_video_url || idea.youtube_video_url;
+  
+  // Extração segura do ID para thumbnails e embeds
+  const videoId = getYouTubeVideoId(videoUrl || '');
   const hasVideo = !!videoId;
   
   const visuals = getNicheVisuals(idea.niche);
@@ -94,7 +92,6 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   const creatorAvatar = idea.creator_avatar || idea.profiles?.avatar_url;
 
   const handleCardClick = (i: Idea) => {
-      setIsPlaying(false);
       onClick(i);
   };
 
@@ -138,24 +135,46 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
     return (
       <div 
         onClick={() => handleCardClick(idea)}
-        className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-center gap-4"
+        className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-start gap-4"
       >
-        {/* Left: Image Thumbnail */}
-        <div className={`w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : visuals.bg}`}>
+        {/* Left: Image Thumbnail or Video Thumb or Icon */}
+        {/* AQUI: Se tiver imagem, mostra imagem. Se não, e tiver vídeo, mostra thumb do vídeo. */}
+        <div 
+            onClick={(e) => {
+                // Se clicar na foto e for um vídeo (sem capa personalizada), abre o vídeo direto
+                if (hasVideo && !hasImage) {
+                    e.stopPropagation();
+                    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+                }
+            }}
+            className={`w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : (hasVideo ? 'bg-black' : visuals.bg)}`}
+        >
              {hasImage ? (
                  <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
+             ) : hasVideo ? (
+                 // LÓGICA VISUAL DO VÍDEO NA THUMBNAIL (Fallback se não tiver imagem)
+                 <>
+                    <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-80" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-6 h-6 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm">
+                            <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                        </div>
+                    </div>
+                 </>
              ) : (
                  <VisualIcon className={`w-6 h-6 ${visuals.text}`} />
              )}
-             {hasVideo && (
-                 <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md">
+             
+             {/* Mini badge se tiver vídeo E imagem (indica que tem vídeo disponível) */}
+             {hasVideo && hasImage && (
+                 <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md shadow-sm z-10">
                      <Youtube className="w-2 h-2" />
                  </div>
              )}
         </div>
 
         {/* Score */}
-        <div className="flex flex-col items-center min-w-[3rem]">
+        <div className="flex flex-col items-center min-w-[3rem] pt-1">
              <span className="text-xs font-bold text-gray-400 mb-1">Rank</span>
              <span className={`text-lg font-bold flex items-center gap-1 ${hasVotes ? 'text-orange-500' : 'text-gray-300'}`}>
                 {idea.votes_count}
@@ -172,16 +191,29 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
             {idea.payment_type === 'paid' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
             {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
           </div>
+          
           <h3 className="text-base font-bold text-apple-text truncate">{idea.title}</h3>
-          <div className="flex items-center gap-3 mt-1">
-             <p className="text-xs text-gray-500 truncate max-w-[200px]">{idea.pain}</p>
+          
+          <div className="flex items-center gap-3 mt-1 mb-2">
+             <p className="text-xs text-gray-500 truncate max-w-[250px]">{idea.pain}</p>
              <span className="text-gray-300 text-[10px]">•</span>
              {renderAuthor()}
           </div>
+
+          {/* LÓGICA PRINCIPAL: PLAYER DE VÍDEO NO CORPO DO CARD */}
+          {/* Isso garante que o vídeo apareça MESMO se tiver imagem de capa na esquerda */}
+          {hasVideo && (
+              <div className="mt-4 pt-3 border-t border-dashed border-gray-100 max-w-lg">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
+                      <Video className="w-3 h-3" /> Apresentação
+                  </div>
+                  <YouTubePreview url={videoUrl} className="!mt-0 shadow-sm" />
+              </div>
+          )}
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 pt-1">
             <ShareButton idea={idea} variant="card" />
             {isOwner && onDelete && (
                 <button 
@@ -201,94 +233,49 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
   return (
     <div className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 flex flex-col h-full">
       
-      {/* Image Header / Video Player */}
-      <div className={`h-32 w-full relative overflow-hidden ${!isPlaying ? 'cursor-pointer' : ''} ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={!isPlaying ? () => handleCardClick(idea) : undefined}>
+      {/* Image Header */}
+      <div className={`h-32 w-full relative overflow-hidden cursor-pointer ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={() => handleCardClick(idea)}>
         
-        {isPlaying && videoId ? (
-            <div className="absolute inset-0 z-40 bg-black animate-in fade-in">
-                <iframe 
-                    width="100%" 
-                    height="100%" 
-                    src={`https://www.youtube.com/embed/${videoId}?autoplay=1&modestbranding=1&rel=0`} 
-                    title="YouTube video player" 
-                    frameBorder="0" 
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                    allowFullScreen
-                    className="w-full h-full"
-                ></iframe>
-                <button 
-                    onClick={(e) => { e.stopPropagation(); setIsPlaying(false); }}
-                    className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors backdrop-blur-sm border border-white/10 z-50"
-                    title="Fechar Vídeo"
-                >
-                    <X className="w-3 h-3" />
-                </button>
-            </div>
+        {hasImage ? (
+                <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
         ) : (
-            <>
-                {hasImage ? (
-                     <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                ) : (
-                     <div className="w-full h-full flex items-center justify-center transition-colors">
-                          <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
-                              <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
-                          </div>
-                     </div>
-                )}
-                
-                {/* Gradient Overlay */}
-                <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
-                
-                {/* Overlaid Tags (LEFT SIDE) */}
-                <div className="absolute top-3 left-3 flex gap-2 z-20">
-                     {renderMonetizationBadge()}
-                    <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
-                      {idea.niche}
-                    </span>
-                </div>
-                
-                {/* Actions Top Right (RIGHT SIDE) */}
-                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                     <ShareButton idea={idea} variant="card" />
-                     {isOwner && onDelete && (
-                         <button 
-                            onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
-                            className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
-                            title="Excluir Projeto"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                     )}
-                     <button 
-                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
-                        className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
-                    >
-                        <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                    </button>
-                </div>
-
-                {/* Video Indicator (Bottom Right) */}
-                {hasVideo && (
-                    <div className="absolute bottom-2 right-2 z-20 bg-red-600/90 backdrop-blur-sm text-white p-1 rounded-lg shadow-sm flex items-center gap-1">
-                        <Youtube className="w-3 h-3" />
-                        <span className="text-[10px] font-bold hidden group-hover:inline">VÍDEO</span>
+                <div className="w-full h-full flex items-center justify-center transition-colors">
+                    <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
+                        <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
                     </div>
-                )}
-
-                {/* Play Button Overlay (Center - Always Visible if Video Exists) */}
-                {hasVideo && (
-                    <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/20 hover:bg-black/40 transition-colors duration-300">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setIsPlaying(true); }}
-                            className="bg-red-600 text-white w-14 h-14 rounded-full shadow-2xl hover:scale-110 transition-transform duration-300 flex items-center justify-center border-2 border-white/50 backdrop-blur-md group/play"
-                            title="Reproduzir Vídeo"
-                        >
-                            <Play className="w-7 h-7 fill-white ml-1" />
-                        </button>
-                    </div>
-                )}
-            </>
+                </div>
         )}
+        
+        {/* Gradient Overlay */}
+        <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
+        
+        {/* Overlaid Tags (LEFT SIDE) */}
+        <div className="absolute top-3 left-3 flex gap-2 z-20">
+                {renderMonetizationBadge()}
+            <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
+                {idea.niche}
+            </span>
+        </div>
+        
+        {/* Actions Top Right (RIGHT SIDE) */}
+        <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+                <ShareButton idea={idea} variant="card" />
+                {isOwner && onDelete && (
+                    <button 
+                    onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
+                    className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
+                    title="Excluir Projeto"
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
+                )}
+                <button 
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
+                className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
+            >
+                <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+            </button>
+        </div>
       </div>
 
       <div className="p-5 flex flex-col flex-grow">
@@ -298,11 +285,21 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
         </h3>
 
         {/* Pain Summary */}
-        <div className="flex-grow mb-4 cursor-pointer" onClick={() => handleCardClick(idea)}>
+        <div className="flex-grow cursor-pointer" onClick={() => handleCardClick(idea)}>
             <p className="text-sm text-gray-500 font-light line-clamp-2 leading-relaxed">
                 "{idea.pain}"
             </p>
         </div>
+
+        {/* Video Preview - Renderizado se tiver vídeo (Grid Mode) */}
+        {hasVideo && (
+            <div className="mb-4 mt-3">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
+                      <Video className="w-3 h-3" /> Apresentação
+                </div>
+                <YouTubePreview url={videoUrl} />
+            </div>
+        )}
 
         {/* Footer: Votes & Action & Author */}
         <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
