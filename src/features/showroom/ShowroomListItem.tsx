@@ -3,7 +3,7 @@
 import React from 'react';
 import { Idea } from '../../types';
 import { Heart, ExternalLink, Rocket, Flame, Target, Megaphone } from 'lucide-react';
-import ShareButton from '../ShareButton';
+import ShareButton from '../../components/ui/ShareButton';
 
 interface ShowroomListItemProps {
   project: Idea;

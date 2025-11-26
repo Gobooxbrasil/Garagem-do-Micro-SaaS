@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { UserProfile } from '../types';
-import { PixConfiguration } from './pix/PixConfiguration';
+import { supabase } from '../../lib/supabaseClient';
+import { UserProfile } from '../../types';
+import { PixConfiguration } from '../pix/PixConfiguration';
 import { 
   User, 
   Lock, 

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Trash2, AlertCircle, Rocket, Youtube, Target, Megaphone, CheckSquare, Square, Mail, Key } from 'lucide-react';
-import { Idea } from '../types';
+import { Idea } from '../../types';
 
 interface NewProjectModalProps {
   isOpen: boolean;

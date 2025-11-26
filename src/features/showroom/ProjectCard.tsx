@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Project } from '../types';
+import { Project } from '../../types';
 import { Star, MessageSquare, Box, User } from 'lucide-react';
 
 interface ProjectCardProps {

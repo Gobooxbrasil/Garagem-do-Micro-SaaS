@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Idea } from '../types';
+import { Idea } from '../../types';
 import { X, Lightbulb, Upload, Trash2, AlertCircle, DollarSign, EyeOff, Lock, Phone, Mail, Eye, Info, CheckCircle2, Youtube, Clipboard, FileCode, ExternalLink, Loader2 } from 'lucide-react';
-import { PRESET_NICHES } from '../constants';
+import { PRESET_NICHES } from '../../constants';
 
 interface NewIdeaModalProps {
   isOpen: boolean;

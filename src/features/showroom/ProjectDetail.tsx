@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Project, Review } from '../types';
+import { Project, Review } from '../../types';
 import { 
   ArrowLeft, 
   ExternalLink, 

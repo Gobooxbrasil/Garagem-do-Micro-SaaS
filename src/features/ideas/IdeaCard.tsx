@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { Idea } from '../types';
-import ShareButton from './ShareButton';
-import { YouTubePreview, getYouTubeVideoId } from './YouTubePreview';
+import { Idea } from '../../types';
+import ShareButton from '../../components/ui/ShareButton';
+import { YouTubePreview, getYouTubeVideoId } from '../../components/ui/YouTubePreview';
 import { 
   Heart,
   Flame,

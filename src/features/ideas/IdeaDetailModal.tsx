@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Idea, Improvement } from '../types';
-import ShareButton from './ShareButton';
-import RequestPixModal from './modals/RequestPixModal';
-import { PurchaseModal } from './modals/PurchaseModal';
-import { supabase } from '../lib/supabaseClient';
-import { YouTubePreview, getYouTubeVideoId } from './YouTubePreview'; // Importação centralizada
+import { Idea, Improvement } from '../../types';
+import ShareButton from '../../components/ui/ShareButton';
+import RequestPixModal from '../../components/ui/RequestPixModal';
+import { PurchaseModal } from '../../components/ui/PurchaseModal';
+import { supabase } from '../../lib/supabaseClient';
+import { YouTubePreview, getYouTubeVideoId } from '../../components/ui/YouTubePreview'; // Importação centralizada
 import { 
   X, 
   AlertCircle, 

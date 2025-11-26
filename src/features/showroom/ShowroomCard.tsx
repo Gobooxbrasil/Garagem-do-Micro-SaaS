@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
 import { Idea } from '../../types';
-import ShareButton from '../ShareButton';
+import ShareButton from '../../components/ui/ShareButton';
 import { Heart, ExternalLink, User, Flame, Rocket, Youtube, Target, Megaphone, Play, X } from 'lucide-react';
-import { getYouTubeVideoId } from '../YouTubePreview'; // Importação centralizada
+import { getYouTubeVideoId } from '../../components/ui/YouTubePreview'; // Importação centralizada
 
 interface ShowroomCardProps {
   project: Idea;
