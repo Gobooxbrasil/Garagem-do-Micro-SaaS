@@ -7,14 +7,13 @@ import { ShowroomCard } from './ShowroomCard';
 import { ShowroomListItem } from './ShowroomListItem';
 import { EmptyState } from './EmptyState';
 import { IdeasListSkeleton } from '../../components/ui/LoadingStates';
-import { useToggleFavorite, useJoinInterest } from '../../hooks/use-mutations';
-import { useNavigate } from 'react-router-dom';
+import { useToggleFavorite, useJoinInterest, useVoteIdea, useSaveIdea } from '../../hooks/use-mutations';
 import NewProjectModal from '../ideas/NewProjectModal';
+import IdeaDetailModal from '../ideas/IdeaDetailModal';
 import { Plus } from 'lucide-react';
 
 const ShowroomPage: React.FC = () => {
     const { session } = useAuth();
-    const navigate = useNavigate();
     const { data: userInteractions } = useUserInteractions(session?.user?.id);
     const favoriteIds = useMemo(() => Array.from(userInteractions?.favorites || []) as string[], [userInteractions]);
 
@@ -25,8 +24,9 @@ const ShowroomPage: React.FC = () => {
     const [showroomSort, setShowroomSort] = useState<'votes' | 'recent'>('votes');
     const [showroomMyProjects, setShowroomMyProjects] = useState(false);
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-    const { data: showroomProjects, isLoading } = useIdeas({
+    const { data: response, isLoading } = useIdeas({
         onlyShowroom: true,
         search: showroomSearch,
         category: showroomCategory,
@@ -38,21 +38,28 @@ const ShowroomPage: React.FC = () => {
     });
 
     const hydratedShowroomProjects = useMemo<Idea[]>(() => {
-        if (!showroomProjects) return [];
-        return showroomProjects.map(p => ({
+        if (!response?.data) return [];
+        return response.data.map(p => ({
             ...p,
             hasVoted: userInteractions?.votes?.has(p.id) || false,
             isFavorite: userInteractions?.favorites?.has(p.id) || false,
             isInterested: userInteractions?.interests?.has(p.id) || false
         }));
-    }, [showroomProjects, userInteractions]);
+    }, [response, userInteractions]);
 
     const favMutation = useToggleFavorite();
+    const voteMutation = useVoteIdea();
+    const saveMutation = useSaveIdea();
 
     const handleFavorite = (id: string) => {
         if (!session) return alert('Faça login para favoritar');
         const item = hydratedShowroomProjects.find(i => i.id === id);
         if (item) favMutation.mutate({ ideaId: id, userId: session.user.id, isFavorite: !!item.isFavorite });
+    };
+
+    const handleVote = (id: string) => {
+        if (!session) return alert('Faça login para votar');
+        voteMutation.mutate({ ideaId: id, userId: session.user.id });
     };
 
     return (
@@ -68,32 +75,45 @@ const ShowroomPage: React.FC = () => {
             </div>
 
             <ShowroomFilters
-                search={showroomSearch} setSearch={setShowroomSearch}
+                searchQuery={showroomSearch} setSearchQuery={setShowroomSearch}
                 category={showroomCategory} setCategory={setShowroomCategory}
                 viewMode={showroomViewMode} setViewMode={setShowroomViewMode}
                 showFavorites={showroomShowFavs} setShowFavorites={setShowroomShowFavs}
                 sortBy={showroomSort} setSortBy={setShowroomSort}
                 myProjects={showroomMyProjects} setMyProjects={setShowroomMyProjects}
-                isLoggedIn={!!session}
+                requireAuth={() => !!session}
             />
 
             {isLoading ? <IdeasListSkeleton /> : (
                 <>
-                    {hydratedShowroomProjects.length === 0 ? <EmptyState /> : (
+                    {hydratedShowroomProjects.length === 0 ? (
+                        <EmptyState
+                            onClearFilters={() => {
+                                setShowroomSearch('');
+                                setShowroomCategory('Todos');
+                                setShowroomShowFavs(false);
+                                setShowroomMyProjects(false);
+                            }}
+                            onNewProject={() => session ? setIsProjectModalOpen(true) : alert('Faça login para enviar')}
+                        />
+                    ) : (
                         <div className={showroomViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" : "flex flex-col gap-4"}>
                             {hydratedShowroomProjects.map(project => (
                                 showroomViewMode === 'grid' ? (
                                     <ShowroomCard
                                         key={project.id}
                                         project={project}
-                                        onClick={() => navigate(`/showroom/${project.id}`)}
-                                        onFavorite={() => handleFavorite(project.id)}
+                                        onClick={() => setSelectedProjectId(project.id)}
+                                        onToggleFavorite={() => handleFavorite(project.id)}
+                                        onVote={() => handleVote(project.id)}
                                     />
                                 ) : (
                                     <ShowroomListItem
                                         key={project.id}
                                         project={project}
-                                        onClick={() => navigate(`/showroom/${project.id}`)}
+                                        onClick={() => setSelectedProjectId(project.id)}
+                                        onToggleFavorite={() => handleFavorite(project.id)}
+                                        onVote={() => handleVote(project.id)}
                                     />
                                 )
                             ))}
@@ -102,7 +122,32 @@ const ShowroomPage: React.FC = () => {
                 </>
             )}
 
-            <NewProjectModal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} />
+            <NewProjectModal
+                isOpen={isProjectModalOpen}
+                onClose={() => setIsProjectModalOpen(false)}
+                onSave={async (data) => {
+                    if (!session?.user?.id) return;
+                    try {
+                        await saveMutation.mutateAsync({ ...data, user_id: session.user.id });
+                        setIsProjectModalOpen(false);
+                    } catch (error) {
+                        console.error('Error saving project:', error);
+                        alert('Erro ao salvar projeto. Tente novamente.');
+                    }
+                }}
+            />
+
+            {selectedProjectId && (
+                <IdeaDetailModal
+                    idea={hydratedShowroomProjects.find(p => p.id === selectedProjectId) || null}
+                    currentUserId={session?.user?.id}
+                    onClose={() => setSelectedProjectId(null)}
+                    onUpvote={(id) => handleVote(id)}
+                    onToggleFavorite={(id) => handleFavorite(id)}
+                    onRequestPdr={async () => { }}
+                    refreshData={() => { }}
+                />
+            )}
         </div>
     );
 };

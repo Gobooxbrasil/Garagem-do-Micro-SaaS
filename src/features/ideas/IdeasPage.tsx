@@ -8,29 +8,44 @@ import NewIdeaModal from './NewIdeaModal';
 import NewProjectModal from './NewProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { IdeasListSkeleton } from '../../components/ui/LoadingStates';
-import { Plus, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Filter, ChevronLeft, ChevronRight, Grid, List } from 'lucide-react';
 import { useVoteIdea, useToggleFavorite, useJoinInterest, useAddImprovement } from '../../hooks/use-mutations';
 import { usePrefetch } from '../../hooks/use-prefetch';
 
 const IdeasPage: React.FC = () => {
     const { session } = useAuth();
-    const { data: rawIdeas, isLoading } = useIdeas({ userId: session?.user?.id });
-    const { data: userInteractions } = useUserInteractions(session?.user?.id);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedNiche, setSelectedNiche] = useState('Todos');
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
     const [showMostVotedOnly, setShowMostVotedOnly] = useState(false);
     const [showMyIdeasOnly, setShowMyIdeasOnly] = useState(false);
-    const [sortBy, setSortBy] = useState<'votes' | 'newest'>('newest');
+    const [sortBy, setSortBy] = useState<'votes' | 'recent'>('recent');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(20);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [nicheSearchQuery, setNicheSearchQuery] = useState('');
 
     const [isIdeaModalOpen, setIsIdeaModalOpen] = useState(false);
     const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
     const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
-    const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); // For promoting idea
+    const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<Idea | null>(null);
+
+    // Buscar dados com paginação no servidor
+    const { data: response, isLoading } = useIdeas({
+        userId: session?.user?.id,
+        page: currentPage,
+        pageSize: itemsPerPage,
+        category: selectedNiche !== 'Todos' ? selectedNiche : undefined,
+        search: searchQuery || undefined,
+        sortBy: showMostVotedOnly ? 'votes' : sortBy,
+        myProjects: showMyIdeasOnly,
+        showFavorites: showFavoritesOnly
+    });
+
+    const { data: userInteractions } = useUserInteractions(session?.user?.id);
+    const { data: allIdeasForNiches } = useIdeas({ userId: session?.user?.id });
 
     const voteMutation = useVoteIdea();
     const favMutation = useToggleFavorite();
@@ -38,48 +53,26 @@ const IdeasPage: React.FC = () => {
     const improvementMutation = useAddImprovement();
     const { prefetchIdeaDetail } = usePrefetch();
 
+    // Dados paginados do servidor
     const ideas = useMemo<Idea[]>(() => {
-        if (!rawIdeas) return [];
-        return rawIdeas.map(idea => ({
+        if (!response?.data) return [];
+        return response.data.map(idea => ({
             ...idea,
             hasVoted: userInteractions?.votes?.has(idea.id) || false,
             isFavorite: userInteractions?.favorites?.has(idea.id) || false,
             isInterested: userInteractions?.interests?.has(idea.id) || false
         }));
-    }, [rawIdeas, userInteractions]);
+    }, [response, userInteractions]);
 
+    // Total de páginas baseado no count do servidor
+    const totalPages = Math.ceil((response?.totalCount || 0) / itemsPerPage);
+
+    // Nichos para o filtro (usa query separada sem paginação)
     const niches = useMemo<string[]>(() => {
-        if (!rawIdeas) return ['Todos'];
-        const allNiches = rawIdeas.map(i => i.niche);
+        if (!allIdeasForNiches?.data) return ['Todos'];
+        const allNiches = allIdeasForNiches.data.map(i => i.niche);
         return ['Todos', ...Array.from(new Set(allNiches)) as string[]];
-    }, [rawIdeas]);
-
-    const filteredIdeas = useMemo(() => {
-        let result = [...ideas];
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            result = result.filter(idea =>
-                idea.title.toLowerCase().includes(q) ||
-                idea.pain.toLowerCase().includes(q) ||
-                idea.solution.toLowerCase().includes(q)
-            );
-        }
-        if (showFavoritesOnly) result = result.filter(idea => idea.isFavorite);
-        if (showMostVotedOnly) result.sort((a, b) => b.votes_count - a.votes_count);
-        else if (sortBy === 'votes') result.sort((a, b) => b.votes_count - a.votes_count);
-        else result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-        if (showMyIdeasOnly && session?.user) result = result.filter(idea => idea.user_id === session.user.id);
-        if (selectedNiche !== 'Todos') result = result.filter(idea => idea.niche === selectedNiche);
-
-        return result;
-    }, [ideas, selectedNiche, sortBy, searchQuery, showFavoritesOnly, showMyIdeasOnly, showMostVotedOnly, session]);
-
-    const totalPages = Math.ceil(filteredIdeas.length / itemsPerPage);
-    const paginatedIdeas = useMemo(() => {
-        const start = (currentPage - 1) * itemsPerPage;
-        return filteredIdeas.slice(start, start + itemsPerPage);
-    }, [filteredIdeas, currentPage, itemsPerPage]);
+    }, [allIdeasForNiches]);
 
     const handleVote = (id: string) => {
         if (!session) return alert('Faça login para votar');
@@ -115,14 +108,7 @@ const IdeasPage: React.FC = () => {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <input type="text" placeholder="Buscar ideias..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-black/5 focus:border-black transition-all text-sm" />
                     </div>
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Filter className="w-3 h-3" /> Nichos</h3>
-                        <div className="space-y-1">
-                            {niches.map(niche => (
-                                <button key={niche} onClick={() => setSelectedNiche(niche)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${selectedNiche === niche ? 'bg-black text-white font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>{niche}</button>
-                            ))}
-                        </div>
-                    </div>
+
                     <div>
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Filtros</h3>
                         <div className="space-y-1">
@@ -131,21 +117,60 @@ const IdeasPage: React.FC = () => {
                             {session && <button onClick={() => setShowMyIdeasOnly(!showMyIdeasOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${showMyIdeasOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>Minhas Ideias</button>}
                         </div>
                     </div>
+
+                    <div>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Visualização</h3>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${viewMode === 'grid' ? 'bg-black text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <Grid className="w-4 h-4" /> Cards
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${viewMode === 'list' ? 'bg-black text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <List className="w-4 h-4" /> Lista
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Filter className="w-3 h-3" /> Nichos</h3>
+                        <div className="relative mb-3">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-3 h-3" />
+                            <input
+                                type="text"
+                                placeholder="Buscar nicho..."
+                                value={nicheSearchQuery}
+                                onChange={(e) => setNicheSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-black/5 focus:border-black transition-all text-xs"
+                            />
+                        </div>
+                        <div className="space-y-1 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
+                            {niches
+                                .filter(niche => niche.toLowerCase().includes(nicheSearchQuery.toLowerCase()))
+                                .map(niche => (
+                                    <button key={niche} onClick={() => setSelectedNiche(niche)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${selectedNiche === niche ? 'bg-black text-white font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>{niche}</button>
+                                ))}
+                        </div>
+                    </div>
                 </aside>
 
                 <div className="lg:col-span-3">
                     {isLoading ? <IdeasListSkeleton /> : (
-                        <div className="grid gap-6">
-                            {paginatedIdeas.map(idea => (
+                        <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+                            {ideas.map(idea => (
                                 <IdeaCard
                                     key={idea.id}
                                     idea={idea}
-                                    onVote={() => handleVote(idea.id)}
-                                    onFavorite={() => handleFavorite(idea.id)}
+                                    onUpvote={() => handleVote(idea.id)}
+                                    onToggleFavorite={() => handleFavorite(idea.id)}
                                     onClick={() => { setSelectedIdeaId(idea.id); prefetchIdeaDetail(idea.id); }}
-                                    onDelete={() => setIdeaToDelete(idea.id)}
-                                    onPromote={() => handlePromote(idea)}
-                                    isOwner={session?.user?.id === idea.user_id}
+                                    onDelete={session?.user?.id === idea.user_id ? () => setIdeaToDelete(idea.id) : undefined}
+                                    viewMode={viewMode}
+                                    currentUserId={session?.user?.id}
                                 />
                             ))}
                         </div>
@@ -154,9 +179,62 @@ const IdeasPage: React.FC = () => {
                     {/* Pagination */}
                     {totalPages > 1 && (
                         <div className="flex justify-center items-center gap-2 mt-12">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"><ChevronLeft className="w-5 h-5" /></button>
-                            <span className="text-sm font-medium text-gray-600">Página {currentPage} de {totalPages}</span>
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"><ChevronRight className="w-5 h-5" /></button>
+                            <button
+                                onClick={() => {
+                                    setCurrentPage(p => Math.max(1, p - 1));
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                disabled={currentPage === 1}
+                                className="px-4 py-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-gray-600 transition-colors"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+
+                            <div className="flex gap-2">
+                                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map(pageNum => (
+                                    <button
+                                        key={pageNum}
+                                        onClick={() => {
+                                            setCurrentPage(pageNum);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }}
+                                        className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${currentPage === pageNum
+                                            ? 'bg-black text-white shadow-lg'
+                                            : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                ))}
+                                {totalPages > 10 && (
+                                    <>
+                                        <span className="flex items-center text-gray-400 px-2">...</span>
+                                        <button
+                                            onClick={() => {
+                                                setCurrentPage(totalPages);
+                                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                            }}
+                                            className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${currentPage === totalPages
+                                                ? 'bg-black text-white shadow-lg'
+                                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            {totalPages}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    setCurrentPage(p => Math.min(totalPages, p + 1));
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                disabled={currentPage === totalPages}
+                                className="px-4 py-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-gray-600 transition-colors flex items-center gap-2"
+                            >
+                                Seguinte <ChevronRight className="w-4 h-4" />
+                            </button>
                         </div>
                     )}
                 </div>
@@ -164,7 +242,17 @@ const IdeasPage: React.FC = () => {
 
             {/* Modals */}
             <NewIdeaModal isOpen={isIdeaModalOpen} onClose={() => setIsIdeaModalOpen(false)} />
-            {selectedIdeaId && <IdeaDetailModal ideaId={selectedIdeaId} isOpen={!!selectedIdeaId} onClose={() => setSelectedIdeaId(null)} />}
+            {selectedIdeaId && (
+                <IdeaDetailModal
+                    idea={ideas.find(i => i.id === selectedIdeaId) || null}
+                    currentUserId={session?.user?.id}
+                    onClose={() => setSelectedIdeaId(null)}
+                    onUpvote={(id) => handleVote(id)}
+                    onToggleFavorite={(id) => handleFavorite(id)}
+                    onRequestPdr={async () => { }}
+                    refreshData={() => { }}
+                />
+            )}
             {ideaToDelete && <DeleteConfirmationModal isOpen={!!ideaToDelete} onClose={() => setIdeaToDelete(null)} onConfirm={() => { /* Implement delete logic */ }} />}
             {isProjectModalOpen && <NewProjectModal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} initialData={editingProject || undefined} />}
         </div>
