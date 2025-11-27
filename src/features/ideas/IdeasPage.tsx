@@ -154,6 +154,23 @@ const IdeasPage: React.FC = () => {
         setCurrentPage(1);
     };
 
+    const handleAddImprovement = async (ideaId: string, content: string, parentId?: string) => {
+        if (!session?.user?.id) {
+            alert('Faça login para comentar');
+            return;
+        }
+        try {
+            await improvementMutation.mutateAsync({ ideaId, userId: session.user.id, content, parentId });
+            // Refresh idea detail to show new comment
+            if (selectedIdeaId) {
+                prefetchIdeaDetail(selectedIdeaId);
+            }
+        } catch (error) {
+            console.error('Erro ao adicionar comentário:', error);
+            alert('Erro ao adicionar comentário. Tente novamente.');
+        }
+    };
+
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-end mb-10 pb-6 border-b border-gray-100">
@@ -360,11 +377,14 @@ const IdeasPage: React.FC = () => {
                 <IdeaDetailModal
                     idea={ideas.find(i => i.id === selectedIdeaId) || null}
                     currentUserId={session?.user?.id}
+                    currentUserData={{ name: session?.user?.user_metadata?.full_name || 'Usuário', avatar: session?.user?.user_metadata?.avatar_url }}
                     onClose={() => setSelectedIdeaId(null)}
                     onUpvote={(id) => handleVote(id)}
                     onToggleFavorite={(id) => handleFavorite(id)}
                     onRequestPdr={async () => { }}
-                    refreshData={() => { }}
+                    onAddImprovement={handleAddImprovement}
+                    refreshData={() => prefetchIdeaDetail(selectedIdeaId)}
+                    onPromoteIdea={handlePromote}
                 />
             )}
             {ideaToDelete && <DeleteConfirmationModal isOpen={!!ideaToDelete} onClose={() => setIdeaToDelete(null)} onConfirm={() => { /* Implement delete logic */ }} />}
