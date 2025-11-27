@@ -8,7 +8,7 @@ import NewIdeaModal from './NewIdeaModal';
 import NewProjectModal from './NewProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { IdeasListSkeleton } from '../../components/ui/LoadingStates';
-import { Plus, Search, Filter, ChevronLeft, ChevronRight, Grid, List } from 'lucide-react';
+import { Plus, Search, Filter, ChevronLeft, ChevronRight, Grid, List, Flame, Heart, Lightbulb, X } from 'lucide-react';
 import { useVoteIdea, useToggleFavorite, useJoinInterest, useAddImprovement, useSaveIdea } from '../../hooks/use-mutations';
 import { usePrefetch } from '../../hooks/use-prefetch';
 
@@ -46,7 +46,8 @@ const IdeasPage: React.FC = () => {
         showFavorites: showFavoritesOnly,
         favoriteIds: showFavoritesOnly ? Array.from(userInteractions?.favorites || []) : undefined
     });
-    const { data: allIdeasForNiches } = useIdeas({ userId: session?.user?.id });
+    const { data: allIdeasForNiches } = useIdeas({ userId: session?.user?.id, pageSize: 1000 });
+    const { data: myIdeasData } = useIdeas({ userId: session?.user?.id, myProjects: true, pageSize: 1 });
 
     const voteMutation = useVoteIdea();
     const favMutation = useToggleFavorite();
@@ -68,11 +69,24 @@ const IdeasPage: React.FC = () => {
     // Total de páginas baseado no count do servidor
     const totalPages = Math.ceil((response?.totalCount || 0) / itemsPerPage);
 
-    // Nichos para o filtro (usa query separada sem paginação)
-    const niches = useMemo<string[]>(() => {
-        if (!allIdeasForNiches?.data) return ['Todos'];
-        const allNiches = allIdeasForNiches.data.map(i => i.niche);
-        return ['Todos', ...Array.from(new Set(allNiches)) as string[]];
+    // Nichos para o filtro (usa query separada com limite maior para contagem)
+    const niches = useMemo<{ name: string; count: number }[]>(() => {
+        if (!allIdeasForNiches?.data) return [{ name: 'Todos', count: 0 }];
+
+        const counts: Record<string, number> = {};
+        allIdeasForNiches.data.forEach(idea => {
+            const niche = idea.niche || 'Outros';
+            counts[niche] = (counts[niche] || 0) + 1;
+        });
+
+        const nicheList = Object.entries(counts).map(([name, count]) => ({ name, count }));
+        // Ordenar por contagem decrescente
+        nicheList.sort((a, b) => b.count - a.count);
+
+        return [
+            { name: 'Todos', count: allIdeasForNiches.totalCount },
+            ...nicheList
+        ];
     }, [allIdeasForNiches]);
 
     const saveMutation = useSaveIdea();
@@ -116,6 +130,24 @@ const IdeasPage: React.FC = () => {
         setIsProjectModalOpen(true);
     };
 
+    const activeFiltersCount = [
+        searchQuery,
+        selectedNiche !== 'Todos',
+        showMostVotedOnly,
+        showFavoritesOnly,
+        showMyIdeasOnly
+    ].filter(Boolean).length;
+
+    const clearFilters = () => {
+        setSearchQuery('');
+        setSelectedNiche('Todos');
+        setShowMostVotedOnly(false);
+        setShowFavoritesOnly(false);
+        setShowMyIdeasOnly(false);
+        setNicheSearchQuery('');
+        setCurrentPage(1);
+    };
+
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-end mb-10 pb-6 border-b border-gray-100">
@@ -135,12 +167,53 @@ const IdeasPage: React.FC = () => {
                         <input type="text" placeholder="Buscar ideias..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-black/5 focus:border-black transition-all text-sm" />
                     </div>
 
+                    {activeFiltersCount > 0 && (
+                        <button
+                            onClick={clearFilters}
+                            className="w-full flex items-center justify-between px-4 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium group mb-6"
+                        >
+                            <span className="flex items-center gap-2">
+                                <X className="w-4 h-4" />
+                                Limpar Filtros
+                            </span>
+                            <span className="bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded-full group-hover:bg-red-300 transition-colors">
+                                {activeFiltersCount}
+                            </span>
+                        </button>
+                    )}
+
                     <div>
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Filtros</h3>
                         <div className="space-y-1">
-                            <button onClick={() => setShowMostVotedOnly(!showMostVotedOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${showMostVotedOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>Mais Votadas</button>
-                            <button onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${showFavoritesOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>Favoritos</button>
-                            {session && <button onClick={() => setShowMyIdeasOnly(!showMyIdeasOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${showMyIdeasOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>Minhas Ideias</button>}
+                            <button onClick={() => setShowMostVotedOnly(!showMostVotedOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group ${showMostVotedOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                <span className="flex items-center gap-2">
+                                    <Flame className={`w-4 h-4 ${showMostVotedOnly ? 'text-black fill-black' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                                    Mais Votadas
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${showMostVotedOnly ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                    {allIdeasForNiches?.totalCount || 0}
+                                </span>
+                            </button>
+                            <button onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group ${showFavoritesOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                <span className="flex items-center gap-2">
+                                    <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'text-black fill-black' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                                    Favoritos
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${showFavoritesOnly ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                    {userInteractions?.favorites?.size || 0}
+                                </span>
+                            </button>
+                            {session && (
+                                <button onClick={() => setShowMyIdeasOnly(!showMyIdeasOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group ${showMyIdeasOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                    <span className="flex items-center gap-2">
+                                        <Lightbulb className={`w-4 h-4 ${showMyIdeasOnly ? 'text-black fill-black' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                                        Meus Projetos
+                                    </span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${showMyIdeasOnly ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                        {myIdeasData?.totalCount || 0}
+                                    </span>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -176,9 +249,14 @@ const IdeasPage: React.FC = () => {
                         </div>
                         <div className="space-y-1 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
                             {niches
-                                .filter(niche => niche.toLowerCase().includes(nicheSearchQuery.toLowerCase()))
+                                .filter(niche => niche.name.toLowerCase().includes(nicheSearchQuery.toLowerCase()))
                                 .map(niche => (
-                                    <button key={niche} onClick={() => setSelectedNiche(niche)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${selectedNiche === niche ? 'bg-black text-white font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>{niche}</button>
+                                    <button key={niche.name} onClick={() => setSelectedNiche(niche.name)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group ${selectedNiche === niche.name ? 'bg-black text-white font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                        <span>{niche.name}</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${selectedNiche === niche.name ? 'bg-white text-black' : 'bg-gray-100 text-gray-500'}`}>
+                                            {niche.count}
+                                        </span>
+                                    </button>
                                 ))}
                         </div>
                     </div>
