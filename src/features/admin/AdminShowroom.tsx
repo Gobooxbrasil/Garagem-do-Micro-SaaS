@@ -16,7 +16,8 @@ interface AdminShowroomProps {
 const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
     const [search, setSearch] = useState('');
     // Busca apenas itens do showroom
-    const { data: projects, isLoading } = useIdeas({ search, onlyShowroom: true });
+    const { data: queryData, isLoading } = useIdeas({ search, onlyShowroom: true });
+    const projects = queryData?.data || [];
     const queryClient = useQueryClient();
 
     // States de Modal
@@ -82,7 +83,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                     supabase.from('idea_improvements').delete().eq('idea_id', id),
                     supabase.from('idea_transactions').delete().eq('idea_id', id),
                     supabase.from('favorites').delete().eq('idea_id', id),
-                    supabase.from('reviews').delete().eq('project_id', id), 
+                    supabase.from('reviews').delete().eq('project_id', id),
                     supabase.from('notifications').delete().match({ 'payload->idea_id': id })
                 ]);
 
@@ -171,14 +172,14 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            
+
             {/* Header Actions */}
             <div className="flex flex-col xl:flex-row justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar projeto, nicho ou link..." 
+                    <input
+                        type="text"
+                        placeholder="Buscar projeto, nicho ou link..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-zinc-900/10 outline-none"
@@ -187,13 +188,13 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                 <div className="flex gap-2 flex-wrap">
                     {selectedIds.size > 0 && (
                         <>
-                            <button 
+                            <button
                                 onClick={() => setIsBulkEditModalOpen(true)}
                                 className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
                             >
                                 <Pencil className="w-4 h-4" /> Editar ({selectedIds.size})
                             </button>
-                            <button 
+                            <button
                                 onClick={handleBulkDelete}
                                 disabled={isBulkDeleting}
                                 className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
@@ -203,8 +204,8 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                             </button>
                         </>
                     )}
-                    
-                    <button 
+
+                    <button
                         onClick={() => { setEditingProject(null); setIsModalOpen(true); }}
                         className="px-4 py-2 bg-zinc-900 hover:bg-black text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                     >
@@ -234,7 +235,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                             {isLoading ? (
-                                <tr><td colSpan={7} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>
                             ) : paginatedData.map((project) => {
                                 const isSelected = selectedIds.has(project.id);
                                 const hasImage = project.showroom_image || (project.images && project.images[0]);
@@ -307,13 +308,13 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => handleEdit(project)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
-                                                <button 
-                                                    onClick={() => handleDelete(project.id)} 
+                                                <button onClick={() => handleEdit(project)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                                <button
+                                                    onClick={() => handleDelete(project.id)}
                                                     disabled={isDeleting === project.id}
                                                     className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                 >
-                                                    {isDeleting === project.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4"/>}
+                                                    {isDeleting === project.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                                 </button>
                                             </div>
                                         </td>
@@ -331,8 +332,8 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                 <div className="border-t border-zinc-200 p-4 flex flex-col sm:flex-row justify-between items-center gap-4 bg-zinc-50">
                     <div className="flex items-center gap-2 text-sm text-zinc-500">
                         <span>Mostrar</span>
-                        <select 
-                            value={itemsPerPage} 
+                        <select
+                            value={itemsPerPage}
                             onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                             className="bg-white border border-zinc-300 rounded-lg text-xs py-1 px-2 focus:outline-none focus:border-zinc-500"
                         >
@@ -346,7 +347,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <button 
+                        <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
                             className="p-2 rounded-lg border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -356,7 +357,7 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
                         <span className="text-sm font-medium text-zinc-700 px-2">
                             Página {currentPage} de {totalPages || 1}
                         </span>
-                        <button 
+                        <button
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages || totalPages === 0}
                             className="p-2 rounded-lg border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -368,15 +369,15 @@ const AdminShowroom: React.FC<AdminShowroomProps> = ({ session }) => {
             </div>
 
             {/* Reutiliza NewProjectModal para edição completa do showroom */}
-            <NewProjectModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
+            <NewProjectModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
                 onSave={handleSave}
                 initialData={editingProject}
             />
 
             {/* Reutiliza BulkEditModal (já suporta campos de showroom como imagem e monetização) */}
-            <BulkEditModal 
+            <BulkEditModal
                 isOpen={isBulkEditModalOpen}
                 onClose={() => setIsBulkEditModalOpen(false)}
                 selectedCount={selectedIds.size}

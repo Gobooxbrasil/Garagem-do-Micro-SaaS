@@ -16,7 +16,8 @@ interface AdminIdeasProps {
 
 const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
     const [search, setSearch] = useState('');
-    const { data: ideas, isLoading } = useIdeas({ search });
+    const { data: queryData, isLoading } = useIdeas({ search });
+    const ideas = queryData?.data || [];
     const queryClient = useQueryClient();
 
     // States de Modal
@@ -83,13 +84,13 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     supabase.from('idea_improvements').delete().eq('idea_id', id),
                     supabase.from('idea_transactions').delete().eq('idea_id', id),
                     supabase.from('favorites').delete().eq('idea_id', id),
-                    supabase.from('reviews').delete().eq('project_id', id), 
+                    supabase.from('reviews').delete().eq('project_id', id),
                     supabase.from('notifications').delete().match({ 'payload->idea_id': id })
                 ]);
 
                 // 2. Excluir a ideia principal
                 const { error } = await supabase.from('ideas').delete().eq('id', id);
-                
+
                 if (error) throw error;
 
                 queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
@@ -195,14 +196,14 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            
+
             {/* Header Actions */}
             <div className="flex flex-col xl:flex-row justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar por título ou ID curto..." 
+                    <input
+                        type="text"
+                        placeholder="Buscar por título ou ID curto..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-zinc-900/10 outline-none"
@@ -211,13 +212,13 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 <div className="flex gap-2 flex-wrap">
                     {selectedIds.size > 0 && (
                         <>
-                            <button 
+                            <button
                                 onClick={() => setIsBulkEditModalOpen(true)}
                                 className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
                             >
                                 <Pencil className="w-4 h-4" /> Editar ({selectedIds.size})
                             </button>
-                            <button 
+                            <button
                                 onClick={handleBulkDelete}
                                 disabled={isBulkDeleting}
                                 className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2 animate-in fade-in zoom-in"
@@ -227,8 +228,8 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                             </button>
                         </>
                     )}
-                    
-                    <button 
+
+                    <button
                         onClick={handleDownloadTemplate}
                         className="px-4 py-2 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                         title="Baixar modelo CSV"
@@ -237,7 +238,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         Baixar Modelo
                     </button>
 
-                    <button 
+                    <button
                         onClick={() => setIsImportModalOpen(true)}
                         className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                     >
@@ -245,7 +246,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         Importar Planilha
                     </button>
 
-                    <button 
+                    <button
                         onClick={() => { setEditingIdea(null); setIsModalOpen(true); }}
                         className="px-4 py-2 bg-zinc-900 hover:bg-black text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                     >
@@ -273,11 +274,11 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                             {isLoading ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
+                                <tr><td colSpan={5} className="p-8 text-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>
                             ) : paginatedData.map((idea) => {
                                 const isSelected = selectedIds.has(idea.id);
                                 const hasVideo = idea.youtube_video_url || idea.youtube_url || idea.showroom_video_url;
-                                
+
                                 return (
                                     <tr key={idea.id} className={`transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-zinc-50'}`}>
                                         <td className="px-4 py-4">
@@ -289,10 +290,10 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                                             <div className="flex items-center gap-2 mb-1">
                                                 <p className="text-sm font-bold text-zinc-900 line-clamp-1">{idea.title}</p>
                                                 {hasVideo && (
-                                                    <a 
-                                                        href={hasVideo} 
-                                                        target="_blank" 
-                                                        rel="noreferrer" 
+                                                    <a
+                                                        href={hasVideo}
+                                                        target="_blank"
+                                                        rel="noreferrer"
                                                         className="text-red-500 hover:text-red-700 transition-colors bg-red-50 p-0.5 rounded"
                                                         title="Vídeo Cadastrado (Clique para ver)"
                                                     >
@@ -300,7 +301,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                                                     </a>
                                                 )}
                                             </div>
-                                            <p className="text-[10px] text-zinc-400 font-mono mb-1">ID: {idea.short_id || idea.id.substring(0,6)}</p>
+                                            <p className="text-[10px] text-zinc-400 font-mono mb-1">ID: {idea.short_id || idea.id.substring(0, 6)}</p>
                                             <p className="text-xs text-zinc-500 truncate max-w-[300px]">{idea.pain}</p>
                                         </td>
                                         <td className="px-6 py-4">
@@ -316,13 +317,13 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => handleEdit(idea)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
-                                                <button 
-                                                    onClick={() => handleDelete(idea.id)} 
+                                                <button onClick={() => handleEdit(idea)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                                <button
+                                                    onClick={() => handleDelete(idea.id)}
                                                     disabled={isDeleting === idea.id}
                                                     className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                 >
-                                                    {isDeleting === idea.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4"/>}
+                                                    {isDeleting === idea.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                                 </button>
                                             </div>
                                         </td>
@@ -340,8 +341,8 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 <div className="border-t border-zinc-200 p-4 flex flex-col sm:flex-row justify-between items-center gap-4 bg-zinc-50">
                     <div className="flex items-center gap-2 text-sm text-zinc-500">
                         <span>Mostrar</span>
-                        <select 
-                            value={itemsPerPage} 
+                        <select
+                            value={itemsPerPage}
                             onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                             className="bg-white border border-zinc-300 rounded-lg text-xs py-1 px-2 focus:outline-none focus:border-zinc-500"
                         >
@@ -355,7 +356,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <button 
+                        <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
                             className="p-2 rounded-lg border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -365,7 +366,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                         <span className="text-sm font-medium text-zinc-700 px-2">
                             Página {currentPage} de {totalPages || 1}
                         </span>
-                        <button 
+                        <button
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages || totalPages === 0}
                             className="p-2 rounded-lg border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -376,14 +377,14 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 </div>
             </div>
 
-            <NewIdeaModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
+            <NewIdeaModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
                 onSave={handleSave}
                 initialData={editingIdea}
             />
 
-            <CsvImportModal 
+            <CsvImportModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={() => {
@@ -393,7 +394,7 @@ const AdminIdeas: React.FC<AdminIdeasProps> = ({ session }) => {
                 userId={session.user.id}
             />
 
-            <BulkEditModal 
+            <BulkEditModal
                 isOpen={isBulkEditModalOpen}
                 onClose={() => setIsBulkEditModalOpen(false)}
                 selectedCount={selectedIds.size}
