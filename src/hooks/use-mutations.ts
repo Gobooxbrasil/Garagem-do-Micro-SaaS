@@ -170,14 +170,17 @@ export function useAddImprovement() {
             return newImprovement;
         },
         onSuccess: (newImprovement, variables) => {
+            // Update cache optimistically
             const key = CACHE_KEYS.ideas.detail(variables.ideaId);
-            queryClient.setQueryData(key, (old: Idea) => {
+            queryClient.setQueryData(key, (old: Idea | undefined) => {
                 if (!old) return old;
                 return {
                     ...old,
                     idea_improvements: [...(old.idea_improvements || []), newImprovement]
                 };
             });
+            // Invalidate to force refetch
+            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(variables.ideaId) });
         }
     });
 }

@@ -161,10 +161,6 @@ const IdeasPage: React.FC = () => {
         }
         try {
             await improvementMutation.mutateAsync({ ideaId, userId: session.user.id, content, parentId });
-            // Refresh idea detail to show new comment
-            if (selectedIdeaId) {
-                prefetchIdeaDetail(selectedIdeaId);
-            }
         } catch (error) {
             console.error('Erro ao adicionar comentário:', error);
             alert('Erro ao adicionar comentário. Tente novamente.');
