@@ -15,13 +15,16 @@ export const AppRoutes: React.FC = () => {
     return (
         <Suspense fallback={<ActionLoader message="Carregando..." />}>
             <Routes>
+                {/* Admin routes - NO LAYOUT */}
+                <Route path="/admin/*" element={<AdminPage />} />
+
+                {/* User routes - WITH LAYOUT */}
                 <Route path="/" element={<Layout />}>
                     <Route index element={<LandingPageWrapper />} />
                     <Route path="ideas" element={<IdeasPage />} />
                     <Route path="showroom" element={<ShowroomPage />} />
                     <Route path="roadmap" element={<RoadmapPage />} />
                     <Route path="profile" element={<ProfileView />} />
-                    <Route path="admin/*" element={<AdminPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
             </Routes>
