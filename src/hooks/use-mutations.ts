@@ -18,6 +18,20 @@ export function useVoteIdea() {
             // Atualiza listas
             queryClient.setQueriesData({ queryKey: CACHE_KEYS.ideas.all }, (oldData: any) => {
                 if (!oldData) return oldData;
+
+                // Nova estrutura: { data: Idea[], totalCount: number }
+                if (oldData.data && Array.isArray(oldData.data)) {
+                    return {
+                        ...oldData,
+                        data: oldData.data.map((idea: Idea) =>
+                            idea.id === ideaId
+                                ? { ...idea, votes_count: (idea.votes_count || 0) + 1, hasVoted: true }
+                                : idea
+                        )
+                    };
+                }
+
+                // Estrutura antiga (fallback): Array direto
                 if (Array.isArray(oldData)) {
                     return oldData.map((idea: Idea) =>
                         idea.id === ideaId
@@ -25,6 +39,7 @@ export function useVoteIdea() {
                             : idea
                     );
                 }
+
                 return oldData;
             });
 
@@ -74,10 +89,26 @@ export function useToggleFavorite() {
         onMutate: async ({ ideaId, userId, isFavorite }) => {
             // Optimistic update
             queryClient.setQueriesData({ queryKey: CACHE_KEYS.ideas.all }, (oldData: any) => {
-                if (!oldData || !Array.isArray(oldData)) return oldData;
-                return oldData.map((idea: Idea) =>
-                    idea.id === ideaId ? { ...idea, isFavorite: !isFavorite } : idea
-                );
+                if (!oldData) return oldData;
+
+                // Nova estrutura: { data: Idea[], totalCount: number }
+                if (oldData.data && Array.isArray(oldData.data)) {
+                    return {
+                        ...oldData,
+                        data: oldData.data.map((idea: Idea) =>
+                            idea.id === ideaId ? { ...idea, isFavorite: !isFavorite } : idea
+                        )
+                    };
+                }
+
+                // Estrutura antiga (fallback): Array direto
+                if (Array.isArray(oldData)) {
+                    return oldData.map((idea: Idea) =>
+                        idea.id === ideaId ? { ...idea, isFavorite: !isFavorite } : idea
+                    );
+                }
+
+                return oldData;
             });
 
             queryClient.setQueryData(['user-interactions', userId], (old: any) => {
@@ -87,9 +118,6 @@ export function useToggleFavorite() {
                 else newFavs.add(ideaId);
                 return { ...old, favorites: newFavs };
             });
-        },
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
         }
     });
 }
