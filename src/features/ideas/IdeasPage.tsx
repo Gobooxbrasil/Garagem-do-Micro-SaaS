@@ -89,6 +89,12 @@ const IdeasPage: React.FC = () => {
         ];
     }, [allIdeasForNiches]);
 
+    // Contar ideias com votos (para o badge "Mais Votadas")
+    const votedIdeasCount = useMemo(() => {
+        if (!allIdeasForNiches?.data) return 0;
+        return allIdeasForNiches.data.filter(idea => (idea.votes_count || 0) > 0).length;
+    }, [allIdeasForNiches]);
+
     const saveMutation = useSaveIdea();
 
     const handleVote = (id: string) => {
@@ -191,7 +197,7 @@ const IdeasPage: React.FC = () => {
                                     Mais Votadas
                                 </span>
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${showMostVotedOnly ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>
-                                    {allIdeasForNiches?.totalCount || 0}
+                                    {votedIdeasCount}
                                 </span>
                             </button>
                             <button onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group ${showFavoritesOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>
