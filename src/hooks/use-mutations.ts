@@ -9,6 +9,19 @@ export function useVoteIdea() {
 
     return useMutation({
         mutationFn: async ({ ideaId, userId }: { ideaId: string; userId: string }) => {
+            // Verificar se já votou (prevenção de duplicatas)
+            const { data: existingVote } = await supabase
+                .from('idea_votes')
+                .select('id')
+                .eq('idea_id', ideaId)
+                .eq('user_id', userId)
+                .single();
+
+            if (existingVote) {
+                console.warn('User already voted on this idea');
+                return; // Já votou, não faz nada
+            }
+
             const { error } = await supabase.from('idea_votes').insert({ idea_id: ideaId, user_id: userId });
             if (error) throw error;
         },
