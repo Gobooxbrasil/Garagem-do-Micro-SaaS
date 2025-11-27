@@ -62,12 +62,10 @@ export function useVoteIdea() {
             return { prevDetail };
         },
         onError: (err, vars, context) => {
-            // Rollback simple: apenas invalida para refetch
+            // Rollback: invalida para refetch do servidor
             queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
-        },
-        onSettled: (data, error, variables) => {
-            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(variables.ideaId) });
-            queryClient.invalidateQueries({ queryKey: ['user-interactions', variables.userId] });
+            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(vars.ideaId) });
+            queryClient.invalidateQueries({ queryKey: ['user-interactions', vars.userId] });
         },
     });
 }
@@ -113,8 +111,10 @@ export function useToggleFavorite() {
                 return { ...old, favorites: newFavs };
             });
         },
-        onSettled: () => {
+        onError: (err, vars) => {
+            // Rollback: invalida para refetch do servidor
             queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+            queryClient.invalidateQueries({ queryKey: ['user-interactions', vars.userId] });
         }
     });
 }
