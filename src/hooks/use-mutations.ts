@@ -9,15 +9,7 @@ export function useVoteIdea() {
 
     return useMutation({
         mutationFn: async ({ ideaId, userId }: { ideaId: string; userId: string }) => {
-            // Usa upsert com onConflict para aproveitar a constraint unique(idea_id, user_id)
-            // Se já existe, não faz nada (ignoreDuplicates)
-            const { error } = await supabase
-                .from('idea_votes')
-                .upsert(
-                    { idea_id: ideaId, user_id: userId },
-                    { onConflict: 'idea_id,user_id', ignoreDuplicates: true }
-                );
-
+            const { error } = await supabase.from('idea_votes').insert({ idea_id: ideaId, user_id: userId });
             if (error) throw error;
         },
         onMutate: async ({ ideaId, userId }) => {
@@ -26,18 +18,6 @@ export function useVoteIdea() {
             // Atualiza listas
             queryClient.setQueriesData({ queryKey: CACHE_KEYS.ideas.all }, (oldData: any) => {
                 if (!oldData) return oldData;
-                // Handle new structure: { data: Idea[], totalCount: number }
-                if (oldData.data && Array.isArray(oldData.data)) {
-                    return {
-                        ...oldData,
-                        data: oldData.data.map((idea: Idea) =>
-                            idea.id === ideaId
-                                ? { ...idea, votes_count: (idea.votes_count || 0) + 1, hasVoted: true }
-                                : idea
-                        )
-                    };
-                }
-                // Legacy array format (fallback)
                 if (Array.isArray(oldData)) {
                     return oldData.map((idea: Idea) =>
                         idea.id === ideaId
@@ -70,10 +50,12 @@ export function useVoteIdea() {
             return { prevDetail };
         },
         onError: (err, vars, context) => {
-            // Rollback: invalida para refetch do servidor
+            // Rollback simple: apenas invalida para refetch
             queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
-            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(vars.ideaId) });
-            queryClient.invalidateQueries({ queryKey: ['user-interactions', vars.userId] });
+        },
+        onSettled: (data, error, variables) => {
+            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.detail(variables.ideaId) });
+            queryClient.invalidateQueries({ queryKey: ['user-interactions', variables.userId] });
         },
     });
 }
@@ -92,23 +74,10 @@ export function useToggleFavorite() {
         onMutate: async ({ ideaId, userId, isFavorite }) => {
             // Optimistic update
             queryClient.setQueriesData({ queryKey: CACHE_KEYS.ideas.all }, (oldData: any) => {
-                if (!oldData) return oldData;
-                // Handle new structure: { data: Idea[], totalCount: number }
-                if (oldData.data && Array.isArray(oldData.data)) {
-                    return {
-                        ...oldData,
-                        data: oldData.data.map((idea: Idea) =>
-                            idea.id === ideaId ? { ...idea, isFavorite: !isFavorite } : idea
-                        )
-                    };
-                }
-                // Legacy array format (fallback)
-                if (Array.isArray(oldData)) {
-                    return oldData.map((idea: Idea) =>
-                        idea.id === ideaId ? { ...idea, isFavorite: !isFavorite } : idea
-                    );
-                }
-                return oldData;
+                if (!oldData || !Array.isArray(oldData)) return oldData;
+                return oldData.map((idea: Idea) =>
+                    idea.id === ideaId ? { ...idea, isFavorite: !isFavorite } : idea
+                );
             });
 
             queryClient.setQueryData(['user-interactions', userId], (old: any) => {
@@ -119,10 +88,8 @@ export function useToggleFavorite() {
                 return { ...old, favorites: newFavs };
             });
         },
-        onError: (err, vars) => {
-            // Rollback: invalida para refetch do servidor
+        onSettled: () => {
             queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
-            queryClient.invalidateQueries({ queryKey: ['user-interactions', vars.userId] });
         }
     });
 }
