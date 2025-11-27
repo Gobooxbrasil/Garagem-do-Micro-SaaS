@@ -54,12 +54,22 @@ const ShowroomPage: React.FC = () => {
     const handleFavorite = (id: string) => {
         if (!session) return alert('Faça login para favoritar');
         const item = hydratedShowroomProjects.find(i => i.id === id);
-        if (item) favMutation.mutate({ ideaId: id, userId: session.user.id, isFavorite: !!item.isFavorite });
+        if (item) favMutation.mutate({ ideaId: id, userId: session.user.id, isFavorite: !!item.isFavorite }, {
+            onError: (err) => {
+                console.error("Erro ao favoritar:", err);
+                alert("Erro ao atualizar favoritos.");
+            }
+        });
     };
 
     const handleVote = (id: string) => {
         if (!session) return alert('Faça login para votar');
-        voteMutation.mutate({ ideaId: id, userId: session.user.id });
+        voteMutation.mutate({ ideaId: id, userId: session.user.id }, {
+            onError: (err) => {
+                console.error("Erro ao votar:", err);
+                alert("Erro ao registrar voto. Tente novamente.");
+            }
+        });
     };
 
     return (
