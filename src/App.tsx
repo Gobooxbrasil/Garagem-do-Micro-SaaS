@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
+import { ToastProvider } from './context/ToastContext';
 import { AppRoutes } from './AppRoutes';
 
 // Helper to detect subdomain
@@ -48,7 +49,9 @@ const App: React.FC = () => {
     return (
         <BrowserRouter>
             <AuthProvider>
-                <SubdomainRouter />
+                <ToastProvider>
+                    <SubdomainRouter />
+                </ToastProvider>
             </AuthProvider>
         </BrowserRouter>
     );

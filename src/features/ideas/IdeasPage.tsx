@@ -14,6 +14,7 @@ import { usePrefetch } from '../../hooks/use-prefetch';
 import { supabase } from '../../lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 import { CACHE_KEYS } from '../../lib/cache-keys';
+import { useToast } from '../../context/ToastContext';
 
 const IdeasPage: React.FC = () => {
     const { session } = useAuth();
@@ -58,6 +59,7 @@ const IdeasPage: React.FC = () => {
     const improvementMutation = useAddImprovement();
     const { prefetchIdeaDetail } = usePrefetch();
     const queryClient = useQueryClient();
+    const toast = useToast();
 
     // Dados paginados do servidor
     const ideas = useMemo<Idea[]>(() => {
@@ -101,25 +103,27 @@ const IdeasPage: React.FC = () => {
 
     const saveMutation = useSaveIdea();
 
-    const handleVote = (id: string) => {
-        if (!session) return alert('Faça login para votar');
-        voteMutation.mutate({ ideaId: id, userId: session.user.id }, {
-            onError: (err) => {
-                console.error("Erro ao votar:", err);
-                alert("Erro ao registrar voto. Tente novamente.");
-            }
-        });
+    const handleVote = async (ideaId: string) => {
+        if (!session) return toast.warning('Faça login para votar');
+        try {
+            await voteMutation.mutateAsync({ ideaId, userId: session.user.id });
+        } catch (error) {
+            console.error('Erro ao votar:', error);
+            toast.error("Erro ao registrar voto. Tente novamente.");
+        }
     };
 
-    const handleFavorite = (id: string) => {
-        if (!session) return alert('Faça login para favoritar');
+    const handleFavorite = async (id: string) => {
+        if (!session) return toast.warning('Faça login para favoritar');
         const item = ideas.find(i => i.id === id);
-        if (item) favMutation.mutate({ ideaId: id, userId: session.user.id, isFavorite: !!item.isFavorite }, {
-            onError: (err) => {
+        if (item) {
+            try {
+                await favMutation.mutateAsync({ ideaId: id, userId: session.user.id, isFavorite: !!item.isFavorite });
+            } catch (err) {
                 console.error("Erro ao favoritar:", err);
-                alert("Erro ao atualizar favoritos.");
+                toast.error("Erro ao atualizar favoritos.");
             }
-        });
+        }
     };
 
     const handleSaveIdea = async (data: any) => {
@@ -131,7 +135,7 @@ const IdeasPage: React.FC = () => {
             setEditingProject(null);
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            alert('Erro ao salvar. Tente novamente.');
+            toast.error('Erro ao salvar. Tente novamente.');
         }
     };
 
@@ -160,14 +164,14 @@ const IdeasPage: React.FC = () => {
 
     const handleAddImprovement = async (ideaId: string, content: string, parentId?: string) => {
         if (!session?.user?.id) {
-            alert('Faça login para comentar');
+            toast.warning('Faça login para comentar');
             return;
         }
         try {
             await improvementMutation.mutateAsync({ ideaId, userId: session.user.id, content, parentId });
         } catch (error) {
             console.error('Erro ao adicionar comentário:', error);
-            alert('Erro ao adicionar comentário. Tente novamente.');
+            toast.error('Erro ao adicionar comentário. Tente novamente.');
         }
     };
 
@@ -189,10 +193,10 @@ const IdeasPage: React.FC = () => {
             // Close modal
             setIdeaToDelete(null);
 
-            alert('Projeto excluído com sucesso!');
+            toast.success('Projeto excluído com sucesso!');
         } catch (error) {
             console.error('Erro ao excluir projeto:', error);
-            alert('Erro ao excluir projeto. Tente novamente.');
+            toast.error('Erro ao excluir projeto. Tente novamente.');
         }
     };
 
@@ -203,7 +207,7 @@ const IdeasPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Ideias & Validação</h1>
                     <p className="text-gray-500 text-lg font-light">Descubra, vote e valide as próximas grandes ideias.</p>
                 </div>
-                <button onClick={() => session ? setIsIdeaModalOpen(true) : alert('Faça login para criar')} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
+                <button onClick={() => session ? setIsIdeaModalOpen(true) : toast.warning('Faça login para criar')} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
                     <Plus className="w-5 h-5" /> Nova Ideia
                 </button>
             </div>
