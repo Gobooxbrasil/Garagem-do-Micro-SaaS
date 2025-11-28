@@ -53,17 +53,25 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     const sectionTitle = title || (isShowroom ? 'Feedback & Comentários' : 'Dúvidas & Sugestões');
 
     return (
-        <div className="pt-8 border-t border-gray-100">
-            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <MessageSquarePlus className="w-5 h-5 text-gray-400" />
-                {sectionTitle} ({comments.length})
+        <div className="pt-10 border-t border-gray-100">
+            <h3 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
+                <MessageSquarePlus className="w-6 h-6 text-gray-400" />
+                {sectionTitle}
+                <span className="text-sm font-semibold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                    {comments.length}
+                </span>
             </h3>
 
             {/* Comments List */}
-            <div className="space-y-2 mb-8">
+            <div className="space-y-4 mb-10">
                 {commentThreads.length === 0 ? (
-                    <div className="text-gray-400 text-sm italic bg-gray-50 p-6 rounded-xl text-center border border-dashed border-gray-200">
-                        Nenhum comentário ainda. Seja o primeiro a colaborar!
+                    <div className="text-center py-12 px-6">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                            <MessageSquarePlus className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <p className="text-gray-500 text-sm font-medium">
+                            Nenhum comentário ainda. Seja o primeiro a colaborar!
+                        </p>
                     </div>
                 ) : (
                     commentThreads.map((thread) => (
