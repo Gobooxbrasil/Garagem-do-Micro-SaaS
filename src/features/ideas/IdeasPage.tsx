@@ -11,6 +11,9 @@ import { IdeasListSkeleton } from '../../components/ui/LoadingStates';
 import { Plus, Search, Filter, ChevronLeft, ChevronRight, Grid, List, TrendingUp, Heart, Flame, X } from 'lucide-react';
 import { useVoteIdea, useToggleFavorite, useJoinInterest, useAddImprovement, useSaveIdea } from '../../hooks/use-mutations';
 import { usePrefetch } from '../../hooks/use-prefetch';
+import { supabase } from '../../lib/supabaseClient';
+import { useQueryClient } from '@tanstack/react-query';
+import { CACHE_KEYS } from '../../lib/cache-keys';
 
 const IdeasPage: React.FC = () => {
     const { session } = useAuth();
@@ -54,6 +57,7 @@ const IdeasPage: React.FC = () => {
     const joinMutation = useJoinInterest();
     const improvementMutation = useAddImprovement();
     const { prefetchIdeaDetail } = usePrefetch();
+    const queryClient = useQueryClient();
 
     // Dados paginados do servidor
     const ideas = useMemo<Idea[]>(() => {
@@ -164,6 +168,31 @@ const IdeasPage: React.FC = () => {
         } catch (error) {
             console.error('Erro ao adicionar comentário:', error);
             alert('Erro ao adicionar comentário. Tente novamente.');
+        }
+    };
+
+    const handleDeleteIdea = async () => {
+        if (!ideaToDelete || !session?.user?.id) return;
+
+        try {
+            const { error } = await supabase
+                .from('ideas')
+                .delete()
+                .eq('id', ideaToDelete)
+                .eq('user_id', session.user.id); // Ensure user owns the idea
+
+            if (error) throw error;
+
+            // Invalidate cache to refresh the list
+            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+
+            // Close modal
+            setIdeaToDelete(null);
+
+            alert('Projeto excluído com sucesso!');
+        } catch (error) {
+            console.error('Erro ao excluir projeto:', error);
+            alert('Erro ao excluir projeto. Tente novamente.');
         }
     };
 
@@ -383,7 +412,7 @@ const IdeasPage: React.FC = () => {
                     onPromoteIdea={handlePromote}
                 />
             )}
-            {ideaToDelete && <DeleteConfirmationModal isOpen={!!ideaToDelete} onClose={() => setIdeaToDelete(null)} onConfirm={() => { /* Implement delete logic */ }} />}
+            {ideaToDelete && <DeleteConfirmationModal isOpen={!!ideaToDelete} onClose={() => setIdeaToDelete(null)} onConfirm={handleDeleteIdea} />}
             {isProjectModalOpen && (
                 <NewProjectModal
                     isOpen={isProjectModalOpen}
