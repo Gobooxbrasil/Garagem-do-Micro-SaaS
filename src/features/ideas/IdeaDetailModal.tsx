@@ -5,7 +5,9 @@ import ShareButton from '../../components/ui/ShareButton';
 import RequestPixModal from '../../components/ui/RequestPixModal';
 import { PurchaseModal } from '../../components/ui/PurchaseModal';
 import { supabase } from '../../lib/supabaseClient';
-import { YouTubePreview, getYouTubeVideoId } from '../../components/ui/YouTubePreview'; // Importação centralizada
+import { YouTubePreview, getYouTubeVideoId } from '../../components/ui/YouTubePreview';
+import { useComments, useAddComment } from '../../hooks/use-comments';
+import CommentSection from '../../components/comments/CommentSection';
 import {
     X,
     AlertCircle,
@@ -191,10 +193,12 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
     refreshData,
     onPromoteIdea
 }) => {
-    const [newImprovement, setNewImprovement] = useState('');
-    const [submittingImprovement, setSubmittingImprovement] = useState(false);
     const [pdrCopied, setPdrCopied] = useState(false);
     const [showDemoData, setShowDemoData] = useState(false);
+
+    // Comments using new system
+    const { data: comments = [], isLoading: commentsLoading } = useComments(idea?.id);
+    const addCommentMutation = useAddComment();
 
     // Payment States
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -258,24 +262,30 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
         try { await onJoinTeam(idea.id); } catch (error) { console.error(error); }
     };
 
-    const submitImprovement = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newImprovement.trim() || !onAddImprovement) return;
-        setSubmittingImprovement(true);
-        try {
-            await onAddImprovement(idea.id, newImprovement);
-            setNewImprovement('');
-            // Refresh data to show new comment
-            if (refreshData) refreshData();
+    // New comment handlers
+    const handleAddComment = async (content: string) => {
+        if (!currentUserId) {
+            alert('Faça login para comentar');
+            return;
         }
-        catch (error) { alert("Erro ao enviar melhoria."); }
-        finally { setSubmittingImprovement(false); }
+        await addCommentMutation.mutateAsync({
+            ideaId: idea.id,
+            userId: currentUserId,
+            content
+        });
     };
 
     const handleReply = async (parentId: string, content: string) => {
-        if (!onAddImprovement) return;
-        try { await onAddImprovement(idea.id, content, parentId); }
-        catch (error) { console.error(error); }
+        if (!currentUserId) {
+            alert('Faça login para responder');
+            return;
+        }
+        await addCommentMutation.mutateAsync({
+            ideaId: idea.id,
+            userId: currentUserId,
+            content,
+            parentId
+        });
     };
 
     const handleCopyPdr = () => {
@@ -531,11 +541,15 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                                     </div>
                                 )}
 
-                                <div className="pt-8 border-t border-gray-100">
-                                    <h3 className="text-lg font-bold text-apple-text mb-6 flex items-center gap-2"><MessageSquarePlus className="w-5 h-5 text-gray-400" /> {idea.is_showroom ? 'Feedback & Comentários' : 'Dúvidas & Sugestões'} ({idea.idea_improvements?.length || 0})</h3>
-                                    <div className="space-y-2 mb-8">{commentThreads.length === 0 && (<div className="text-gray-400 text-sm italic bg-gray-50 p-6 rounded-xl text-center border border-dashed border-gray-200">Nenhum comentário ainda. Seja o primeiro a colaborar!</div>)}{commentThreads.map((thread) => (<CommentThread key={thread.id} comment={thread} depth={0} onReply={handleReply} currentUserId={currentUserId} />))}</div>
-                                    <form onSubmit={submitImprovement} className="flex gap-3 items-start bg-gray-50 p-4 rounded-2xl border border-gray-200"><div className="flex-grow relative"><textarea required value={newImprovement} onChange={(e) => setNewImprovement(e.target.value)} placeholder={idea.is_showroom ? "Deixe seu feedback para o criador..." : "Sugira uma feature ou deixe seu feedback..."} className="w-full bg-white border border-gray-200 rounded-xl p-3 text-sm focus:border-apple-blue outline-none transition-all resize-none h-24"></textarea></div><button type="submit" disabled={submittingImprovement || !newImprovement.trim()} className="bg-black hover:bg-gray-800 text-white p-3 rounded-xl shadow-lg shadow-black/10 transition-all disabled:opacity-50">{submittingImprovement ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}</button></form>
-                                </div>
+                                {/* Comments Section */}
+                                <CommentSection
+                                    ideaId={idea.id}
+                                    comments={comments}
+                                    currentUserId={currentUserId}
+                                    onAddComment={handleAddComment}
+                                    onReply={handleReply}
+                                    isShowroom={idea.is_showroom}
+                                />
                             </div>
 
                             <div className="space-y-8">
