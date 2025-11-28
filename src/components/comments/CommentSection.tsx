@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquarePlus } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { Improvement } from '../../types';
 import CommentForm from './CommentForm';
 import CommentThread from './CommentThread';
@@ -53,25 +53,23 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     const sectionTitle = title || (isShowroom ? 'Feedback & Comentários' : 'Dúvidas & Sugestões');
 
     return (
-        <div className="pt-10 border-t border-gray-100">
-            <h3 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
-                <MessageSquarePlus className="w-6 h-6 text-gray-400" />
-                {sectionTitle}
-                <span className="text-sm font-semibold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-                    {comments.length}
+        <div className="border-t border-gray-200 pt-6 mt-8">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-gray-500" />
+                    {sectionTitle}
+                </h3>
+                <span className="text-sm text-gray-500 font-medium">
+                    {comments.length} {comments.length === 1 ? 'comentário' : 'comentários'}
                 </span>
-            </h3>
+            </div>
 
             {/* Comments List */}
-            <div className="space-y-4 mb-10">
+            <div className="space-y-4 mb-6">
                 {commentThreads.length === 0 ? (
-                    <div className="text-center py-12 px-6">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-                            <MessageSquarePlus className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <p className="text-gray-500 text-sm font-medium">
-                            Nenhum comentário ainda. Seja o primeiro a colaborar!
-                        </p>
+                    <div className="text-center py-8 text-gray-500 text-sm">
+                        Nenhum comentário ainda. Seja o primeiro a colaborar!
                     </div>
                 ) : (
                     commentThreads.map((thread) => (
@@ -87,10 +85,12 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
             </div>
 
             {/* Add Comment Form */}
-            <CommentForm
-                onSubmit={onAddComment}
-                placeholder={isShowroom ? "Deixe seu feedback para o criador..." : "Sugira uma feature ou deixe seu feedback..."}
-            />
+            <div className="border-t border-gray-200 pt-4">
+                <CommentForm
+                    onSubmit={onAddComment}
+                    placeholder={isShowroom ? "Deixe seu feedback..." : "Adicionar comentário..."}
+                />
+            </div>
         </div>
     );
 };
