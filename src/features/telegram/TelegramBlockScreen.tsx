@@ -124,3 +124,5 @@ const TelegramBlockScreen: React.FC<TelegramBlockScreenProps> = ({ onValidate })
         </div>
     );
 };
+
+export default TelegramBlockScreen;
