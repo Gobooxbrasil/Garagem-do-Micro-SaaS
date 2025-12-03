@@ -33,7 +33,16 @@ export const TelegramGuard: React.FC<TelegramGuardProps> = ({ children }) => {
                 .eq('id', session.user.id)
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                // Se a coluna não existe (erro 42703), libera acesso
+                if (error.code === '42703' || error.message.includes('column')) {
+                    console.warn('Telegram validation columns not found, allowing access');
+                    setNeedsToJoin(false);
+                    setLoading(false);
+                    return;
+                }
+                throw error;
+            }
 
             // Se ainda não validou, mostra tela de entrada
             if (!profile.is_in_telegram_group) {
@@ -43,7 +52,8 @@ export const TelegramGuard: React.FC<TelegramGuardProps> = ({ children }) => {
             }
         } catch (error) {
             console.error('Error checking access:', error);
-            setNeedsToJoin(true);
+            // Em caso de erro, libera acesso (fail-open)
+            setNeedsToJoin(false);
         } finally {
             setLoading(false);
         }
