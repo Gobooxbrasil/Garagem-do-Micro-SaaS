@@ -28,8 +28,8 @@ const TelegramBlockScreen: React.FC<TelegramBlockScreenProps> = ({ onValidate })
     const TELEGRAM_GROUP_LINK = 'https://t.me/microsaaspro';
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 flex items-center justify-center px-4">
-            <div className="max-w-lg w-full">
+        <div className="fixed inset-0 z-50 min-h-screen bg-gradient-to-b from-white to-gray-50 flex items-center justify-center px-4 overflow-y-auto">
+            <div className="max-w-lg w-full my-8">
                 <div className="bg-white rounded-3xl shadow-xl p-8 md:p-12 border border-gray-100">
                     {/* Logo */}
                     <div className="flex justify-center mb-8">
