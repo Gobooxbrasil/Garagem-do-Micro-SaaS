@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthProvider';
 import {
-    Layers, Lightbulb, Rocket, Map, Bell, User, LogOut, ShieldCheck, ChevronDown, Check, Trash2, MessageCircle, Info
+    Layers, Lightbulb, Rocket, Map, Bell, User, LogOut, ShieldCheck, ChevronDown, Check, Trash2, MessageCircle, Info, Download
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useNotifications } from '../../hooks/use-ideas-cache';
@@ -57,13 +57,13 @@ export const Layout: React.FC = () => {
     const markNotificationAsRead = async (id: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         await supabase.from('notifications').update({ read: true }).eq('id', id);
-        queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id) });
+        queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id || '') });
     };
 
     const deleteNotification = async (id: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         await supabase.from('notifications').delete().eq('id', id);
-        queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id) });
+        queryClient.invalidateQueries({ queryKey: CACHE_KEYS.notifications.unread(session?.user?.id || '') });
     };
 
     const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
@@ -97,6 +97,7 @@ export const Layout: React.FC = () => {
                             <button onClick={() => navigate('/ideas')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/ideas') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Lightbulb className="w-4 h-4" />Ideias</button>
                             <button onClick={() => navigate('/showroom')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/showroom') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Rocket className="w-4 h-4" />Showroom</button>
                             <button onClick={() => navigate('/roadmap')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/roadmap') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Map className="w-4 h-4" /> Roadmap</button>
+                            <button onClick={() => navigate('/downloads')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/downloads') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Download className="w-4 h-4" /> Arquivos</button>
                         </div>
 
                         <div className="relative" ref={notificationRef}>

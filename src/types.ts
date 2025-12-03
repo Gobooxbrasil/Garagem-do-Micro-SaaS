@@ -55,14 +55,14 @@ export interface Idea {
   pain: string;
   solution: string;
   why: string;
-  why_is_private?: boolean; 
+  why_is_private?: boolean;
   pricing_model: string;
   target: string;
   sales_strategy: string;
-  pdr?: string; 
+  pdr?: string;
   votes_count: number;
   is_building: boolean;
-  
+
   // Showroom Fields
   is_showroom?: boolean;
   showroom_description?: string;
@@ -77,19 +77,19 @@ export interface Idea {
   youtube_url?: string; // New Standard
 
   // Frontend states
-  isFavorite?: boolean; 
+  isFavorite?: boolean;
   hasVoted?: boolean;
   isInterested?: boolean;
 
-  created_at: string; 
+  created_at: string;
   user_id?: string;
   images?: string[]; // Mantido para compatibilidade, mas showroom usa showroom_image preferencialmente
-  
+
   // Monetization Fields
   payment_type?: 'free' | 'donation' | 'paid';
   monetization_type?: 'NONE' | 'DONATION' | 'PAID';
   price?: number;
-  hidden_fields?: string[]; 
+  hidden_fields?: string[];
   contact_phone?: string;
   contact_email?: string;
 
@@ -106,11 +106,11 @@ export interface Idea {
   profiles?: {
     full_name: string;
     avatar_url: string;
-    pix_key?: string; 
+    pix_key?: string;
   };
 
   // New Relations
-  idea_developers?: Developer[]; 
+  idea_developers?: Developer[];
   idea_interested?: Interested[];
   idea_improvements?: Improvement[];
   idea_transactions?: Transaction[];
@@ -118,7 +118,7 @@ export interface Idea {
 
 export interface Review {
   id: string;
-  project_id?: string; 
+  project_id?: string;
   user_name: string;
   rating: number; // 1-5
   comment: string;
@@ -175,7 +175,7 @@ export interface UserProfile {
   pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
   pix_name?: string;
   pix_bank?: string;
-  
+
   // Admin Fields
   is_admin?: boolean;
   is_blocked?: boolean;
@@ -229,14 +229,14 @@ export interface NPSResponse {
   created_at?: string;
 }
 
-export type AdminSubview = 'DASHBOARD' | 'USERS' | 'IDEAS' | 'SHOWROOM' | 'NPS' | 'FEEDBACK' | 'LOGS' | 'SETTINGS' | 'NOTIFICATIONS';
+export type AdminSubview = 'DASHBOARD' | 'USERS' | 'IDEAS' | 'SHOWROOM' | 'NPS' | 'FEEDBACK' | 'LOGS' | 'SETTINGS' | 'NOTIFICATIONS' | 'DOWNLOADS';
 
-export type ViewState = 
+export type ViewState =
   | { type: 'LANDING' }
   | { type: 'IDEAS' }
   | { type: 'SHOWROOM' }
   | { type: 'ROADMAP' }
-  | { type: 'PROJECT_DETAIL'; projectId: string } 
+  | { type: 'PROJECT_DETAIL'; projectId: string }
   | { type: 'PROFILE' }
   | { type: 'ADMIN'; subview: AdminSubview }
   | { type: 'ADMIN_LOGIN' };
@@ -248,7 +248,7 @@ export interface ShowroomFilters {
   showFavorites?: boolean;
   myProjects?: boolean;
   sortBy?: 'recent' | 'votes';
-  onlyShowroom?: boolean; 
+  onlyShowroom?: boolean;
 }
 
 // --- ADMIN TYPES ---
@@ -280,4 +280,13 @@ export interface AdminLog {
     full_name: string;
     avatar_url: string;
   };
+}
+
+export interface Download {
+  id: string;
+  title: string;
+  description?: string;
+  file_url: string;
+  created_at: string;
+  updated_at?: string;
 }

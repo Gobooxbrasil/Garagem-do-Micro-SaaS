@@ -8,6 +8,7 @@ const LandingPage = lazy(() => import('./pages/LandingPage'));
 const IdeasPage = lazy(() => import('./features/ideas/IdeasPage')); // We'll create this
 const ShowroomPage = lazy(() => import('./features/showroom/ShowroomPage')); // We'll create this
 const RoadmapPage = lazy(() => import('./features/roadmap/RoadmapPage')); // We'll create this
+const DownloadsPage = lazy(() => import('./features/downloads/DownloadsPage'));
 const AdminPage = lazy(() => import('./features/admin/AdminPage')); // We'll create this
 const ProfileView = lazy(() => import('./features/auth/ProfileView'));
 
@@ -24,6 +25,8 @@ export const AppRoutes: React.FC = () => {
                     <Route path="ideas" element={<IdeasPage />} />
                     <Route path="showroom" element={<ShowroomPage />} />
                     <Route path="roadmap" element={<RoadmapPage />} />
+                    <Route path="roadmap" element={<RoadmapPage />} />
+                    <Route path="downloads" element={<DownloadsPage />} />
                     <Route path="profile" element={<ProfileView />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
