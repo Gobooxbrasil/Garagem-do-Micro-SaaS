@@ -29,7 +29,7 @@ export const AppRoutes: React.FC = () => {
                 } />
 
                 {/* User routes - WITH LAYOUT */}
-                <Route path="/" element={<Layout />}>
+                <Route path="/" element={<LayoutWrapper />}>
                     <Route index element={<LandingPageWrapper />} />
 
                     {/* Public routes (Action-based auth) */}
@@ -62,3 +62,19 @@ const LandingPageWrapper = () => {
     }
     return <LandingPage />;
 };
+
+// Wrapper to apply TelegramGuard only for authenticated users
+const LayoutWrapper = () => {
+    const { session } = useAuth();
+
+    if (session) {
+        return (
+            <TelegramGuard>
+                <Layout />
+            </TelegramGuard>
+        );
+    }
+
+    return <Layout />;
+};
+
