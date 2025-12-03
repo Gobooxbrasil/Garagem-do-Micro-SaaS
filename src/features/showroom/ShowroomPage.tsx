@@ -11,6 +11,7 @@ import { useToggleFavorite, useJoinInterest, useVoteIdea, useSaveIdea } from '..
 import NewProjectModal from '../ideas/NewProjectModal';
 import IdeaDetailModal from '../ideas/IdeaDetailModal';
 import { Plus } from 'lucide-react';
+import { useCreateProject } from '../../hooks/useCreateProject';
 
 const ShowroomPage: React.FC = () => {
     const { session } = useAuth();
@@ -50,6 +51,7 @@ const ShowroomPage: React.FC = () => {
     const favMutation = useToggleFavorite();
     const voteMutation = useVoteIdea();
     const saveMutation = useSaveIdea();
+    const { create: createShowroom } = useCreateProject('showroom');
 
     const handleFavorite = (id: string) => {
         if (!session) return alert('Faça login para favoritar');
@@ -138,11 +140,16 @@ const ShowroomPage: React.FC = () => {
                 onSave={async (data) => {
                     if (!session?.user?.id) return;
                     try {
-                        await saveMutation.mutateAsync({ ...data, user_id: session.user.id });
-                        setIsProjectModalOpen(false);
+                        if (data.id) {
+                            await saveMutation.mutateAsync({ ...data, user_id: session.user.id });
+                            setIsProjectModalOpen(false);
+                        } else {
+                            const success = await createShowroom(data);
+                            if (success) setIsProjectModalOpen(false);
+                        }
                     } catch (error) {
                         console.error('Error saving project:', error);
-                        alert('Erro ao salvar projeto. Tente novamente.');
+                        if (data.id) alert('Erro ao salvar projeto. Tente novamente.');
                     }
                 }}
             />

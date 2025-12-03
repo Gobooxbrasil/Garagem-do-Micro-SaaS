@@ -81,12 +81,22 @@ export function useToggleFavorite() {
     return useMutation({
         mutationFn: async ({ ideaId, userId, isFavorite }: { ideaId: string; userId: string, isFavorite: boolean }) => {
             if (isFavorite) {
-                await supabase.from('favorites').delete().match({ user_id: userId, idea_id: ideaId });
+                const { error } = await supabase.from('favorites').delete().match({ user_id: userId, idea_id: ideaId });
+                if (error) throw error;
             } else {
-                await supabase.from('favorites').insert({ user_id: userId, idea_id: ideaId });
+                const { error } = await supabase.from('favorites').insert({ user_id: userId, idea_id: ideaId });
+                if (error) throw error;
             }
         },
         onMutate: async ({ ideaId, userId, isFavorite }) => {
+            // Cancelar queries para evitar sobrescrita
+            await queryClient.cancelQueries({ queryKey: CACHE_KEYS.ideas.all });
+            await queryClient.cancelQueries({ queryKey: ['user-interactions', userId] });
+
+            // Snapshot do valor anterior
+            const previousIdeas = queryClient.getQueryData(CACHE_KEYS.ideas.all);
+            const previousInteractions = queryClient.getQueryData(['user-interactions', userId]);
+
             // Optimistic update
             queryClient.setQueriesData({ queryKey: CACHE_KEYS.ideas.all }, (oldData: any) => {
                 if (!oldData) return oldData;
@@ -118,6 +128,21 @@ export function useToggleFavorite() {
                 else newFavs.add(ideaId);
                 return { ...old, favorites: newFavs };
             });
+
+            return { previousIdeas, previousInteractions };
+        },
+        onError: (err, newTodo, context: any) => {
+            // Reverter em caso de erro
+            if (context?.previousIdeas) {
+                queryClient.setQueriesData({ queryKey: CACHE_KEYS.ideas.all }, context.previousIdeas);
+            }
+            if (context?.previousInteractions) {
+                queryClient.setQueryData(['user-interactions', newTodo.userId], context.previousInteractions);
+            }
+        },
+        onSettled: (data, error, variables) => {
+            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.ideas.all });
+            queryClient.invalidateQueries({ queryKey: ['user-interactions', variables.userId] });
         }
     });
 }

@@ -10,6 +10,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { IdeasListSkeleton } from '../../components/ui/LoadingStates';
 import { Plus, Search, Filter, ChevronLeft, ChevronRight, Grid, List, TrendingUp, Heart, Flame, X } from 'lucide-react';
 import { useVoteIdea, useToggleFavorite, useJoinInterest, useAddImprovement, useSaveIdea } from '../../hooks/use-mutations';
+import { useCreateProject } from '../../hooks/useCreateProject';
 import { usePrefetch } from '../../hooks/use-prefetch';
 import { supabase } from '../../lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -57,6 +58,9 @@ const IdeasPage: React.FC = () => {
     const favMutation = useToggleFavorite();
     const joinMutation = useJoinInterest();
     const improvementMutation = useAddImprovement();
+    const saveMutation = useSaveIdea();
+    const { create: createIdea } = useCreateProject('idea');
+    const { create: createShowroom } = useCreateProject('showroom');
     const { prefetchIdeaDetail } = usePrefetch();
     const queryClient = useQueryClient();
     const toast = useToast();
@@ -101,8 +105,6 @@ const IdeasPage: React.FC = () => {
         return allIdeasForNiches.data.filter(idea => (idea.votes_count || 0) > 0).length;
     }, [allIdeasForNiches]);
 
-    const saveMutation = useSaveIdea();
-
     const handleVote = async (ideaId: string) => {
         if (!session) return toast.warning('Faça login para votar');
         try {
@@ -129,13 +131,31 @@ const IdeasPage: React.FC = () => {
     const handleSaveIdea = async (data: any) => {
         if (!session?.user?.id) return;
         try {
-            await saveMutation.mutateAsync({ ...data, user_id: session.user.id });
-            setIsIdeaModalOpen(false);
-            setIsProjectModalOpen(false);
-            setEditingProject(null);
+            if (data.id) {
+                // Edit mode - bypass rate limit
+                await saveMutation.mutateAsync({ ...data, user_id: session.user.id });
+                setIsIdeaModalOpen(false);
+                setIsProjectModalOpen(false);
+                setEditingProject(null);
+            } else {
+                // Create mode - use rate limit
+                let success = false;
+                if (data.is_showroom) {
+                    success = await createShowroom(data);
+                } else {
+                    success = await createIdea(data);
+                }
+
+                if (success) {
+                    setIsIdeaModalOpen(false);
+                    setIsProjectModalOpen(false);
+                    setEditingProject(null);
+                }
+            }
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            toast.error('Erro ao salvar. Tente novamente.');
+            // Toast is handled by useCreateProject for creation errors
+            if (data.id) toast.error('Erro ao salvar. Tente novamente.');
         }
     };
 
