@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabaseClient';
 import { Download as DownloadType } from '../../types';
 import { Download, FileText, Search, X, Info } from 'lucide-react';
 import { ActionLoader } from '../../components/ui/LoadingStates';
+import { useAuth } from '../../context/AuthProvider';
+import { AuthModal } from '../../components/auth/AuthModal';
 
 const DownloadsPage: React.FC = () => {
     const [downloads, setDownloads] = useState<DownloadType[]>([]);
@@ -10,6 +12,8 @@ const DownloadsPage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedCard, setExpandedCard] = useState<string | null>(null);
     const tooltipRef = useRef<HTMLDivElement>(null);
+    const { session } = useAuth();
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchDownloads = async () => {
@@ -51,6 +55,14 @@ const DownloadsPage: React.FC = () => {
     const toggleExpanded = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         setExpandedCard(expandedCard === id ? null : id);
+    };
+
+    const handleDownload = (e: React.MouseEvent, url: string) => {
+        e.stopPropagation();
+        if (!session) {
+            e.preventDefault();
+            setIsAuthModalOpen(true);
+        }
     };
 
     if (loading) return <ActionLoader message="Carregando arquivos..." />;
@@ -125,8 +137,8 @@ const DownloadsPage: React.FC = () => {
                                         <button
                                             onClick={(e) => toggleExpanded(item.id, e)}
                                             className={`p-1.5 rounded-full transition-all ${expandedCard === item.id
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
                                                 }`}
                                             title="Ver mais informações"
                                         >
@@ -148,7 +160,7 @@ const DownloadsPage: React.FC = () => {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-blue-600 transition-colors group-hover:shadow-lg group-hover:shadow-blue-500/30 mt-auto"
-                                    onClick={(e) => e.stopPropagation()}
+                                    onClick={(e) => handleDownload(e, item.file_url)}
                                 >
                                     <Download className="w-4 h-4" />
                                     Baixar Agora
@@ -196,6 +208,10 @@ const DownloadsPage: React.FC = () => {
                     ))}
                 </div>
             )}
+            <AuthModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+            />
         </div>
     );
 };

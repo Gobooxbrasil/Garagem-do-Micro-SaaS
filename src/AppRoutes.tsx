@@ -32,35 +32,13 @@ export const AppRoutes: React.FC = () => {
                 <Route path="/" element={<Layout />}>
                     <Route index element={<LandingPageWrapper />} />
 
+                    {/* Public routes (Action-based auth) */}
+                    <Route path="ideas" element={<IdeasPage />} />
+                    <Route path="showroom" element={<ShowroomPage />} />
+                    <Route path="roadmap" element={<RoadmapPage />} />
+                    <Route path="downloads" element={<DownloadsPage />} />
+
                     {/* Protected routes - require authentication AND Telegram */}
-                    <Route path="ideas" element={
-                        <ProtectedRoute>
-                            <TelegramGuard>
-                                <IdeasPage />
-                            </TelegramGuard>
-                        </ProtectedRoute>
-                    } />
-                    <Route path="showroom" element={
-                        <ProtectedRoute>
-                            <TelegramGuard>
-                                <ShowroomPage />
-                            </TelegramGuard>
-                        </ProtectedRoute>
-                    } />
-                    <Route path="roadmap" element={
-                        <ProtectedRoute>
-                            <TelegramGuard>
-                                <RoadmapPage />
-                            </TelegramGuard>
-                        </ProtectedRoute>
-                    } />
-                    <Route path="downloads" element={
-                        <ProtectedRoute>
-                            <TelegramGuard>
-                                <DownloadsPage />
-                            </TelegramGuard>
-                        </ProtectedRoute>
-                    } />
                     <Route path="profile" element={
                         <ProtectedRoute>
                             <TelegramGuard>

@@ -7,6 +7,7 @@ import { CreateFeedbackModal } from './CreateFeedbackModal';
 import { FeedbackDetailModal } from './FeedbackDetailModal';
 import { IdeasListSkeleton } from '../../components/ui/LoadingStates';
 import { Plus, Filter } from 'lucide-react';
+import { AuthModal } from '../../components/auth/AuthModal';
 
 const RoadmapPage: React.FC = () => {
     const { session } = useAuth();
@@ -18,9 +19,13 @@ const RoadmapPage: React.FC = () => {
 
     const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
     const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     const handleVote = (id: string) => {
-        if (!session) return alert('Faça login para votar');
+        if (!session) {
+            setIsAuthModalOpen(true);
+            return;
+        }
         feedbackVoteMutation.mutate({ feedbackId: id, userId: session.user.id, hasVoted: !!userFeedbackVotes?.has(id) });
     };
 
@@ -31,7 +36,7 @@ const RoadmapPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Roadmap & Feedback</h1>
                     <p className="text-gray-500 text-lg font-light">Ajude a construir o futuro da plataforma.</p>
                 </div>
-                <button onClick={() => session ? setIsFeedbackModalOpen(true) : alert('Faça login para sugerir')} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
+                <button onClick={() => session ? setIsFeedbackModalOpen(true) : setIsAuthModalOpen(true)} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
                     <Plus className="w-5 h-5" /> Nova Sugestão
                 </button>
             </div>
@@ -81,8 +86,12 @@ const RoadmapPage: React.FC = () => {
                 </div>
             </div>
 
-            <CreateFeedbackModal isOpen={isFeedbackModalOpen} onClose={() => setIsFeedbackModalOpen(false)} />
-            {selectedFeedbackId && <FeedbackDetailModal feedbackId={selectedFeedbackId} isOpen={!!selectedFeedbackId} onClose={() => setSelectedFeedbackId(null)} />}
+            <CreateFeedbackModal isOpen={isFeedbackModalOpen} onClose={() => setIsFeedbackModalOpen(false)} userId={session?.user?.id || ''} />
+            {selectedFeedbackId && <FeedbackDetailModal feedbackId={selectedFeedbackId} onClose={() => setSelectedFeedbackId(null)} userId={session?.user?.id || ''} userHasVoted={!!userFeedbackVotes?.has(selectedFeedbackId)} />}
+            <AuthModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+            />
         </div>
     );
 };

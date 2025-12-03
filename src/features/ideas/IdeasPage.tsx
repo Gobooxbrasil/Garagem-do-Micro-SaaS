@@ -16,6 +16,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 import { CACHE_KEYS } from '../../lib/cache-keys';
 import { useToast } from '../../context/ToastContext';
+import { AuthModal } from '../../components/auth/AuthModal';
 
 const IdeasPage: React.FC = () => {
     const { session } = useAuth();
@@ -36,6 +37,7 @@ const IdeasPage: React.FC = () => {
     const [ideaToDelete, setIdeaToDelete] = useState<string | null>(null);
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<Idea | null>(null);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     const { data: userInteractions } = useUserInteractions(session?.user?.id);
 
@@ -106,7 +108,10 @@ const IdeasPage: React.FC = () => {
     }, [allIdeasForNiches]);
 
     const handleVote = async (ideaId: string) => {
-        if (!session) return toast.warning('Faça login para votar');
+        if (!session) {
+            setIsAuthModalOpen(true);
+            return;
+        }
         try {
             await voteMutation.mutateAsync({ ideaId, userId: session.user.id });
         } catch (error) {
@@ -116,7 +121,10 @@ const IdeasPage: React.FC = () => {
     };
 
     const handleFavorite = async (id: string) => {
-        if (!session) return toast.warning('Faça login para favoritar');
+        if (!session) {
+            setIsAuthModalOpen(true);
+            return;
+        }
         const item = ideas.find(i => i.id === id);
         if (item) {
             try {
@@ -227,7 +235,7 @@ const IdeasPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Ideias & Validação</h1>
                     <p className="text-gray-500 text-lg font-light">Descubra, vote e valide as próximas grandes ideias.</p>
                 </div>
-                <button onClick={() => session ? setIsIdeaModalOpen(true) : toast.warning('Faça login para criar')} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
+                <button onClick={() => session ? setIsIdeaModalOpen(true) : setIsAuthModalOpen(true)} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
                     <Plus className="w-5 h-5" /> Nova Ideia
                 </button>
             </div>
@@ -445,6 +453,10 @@ const IdeasPage: React.FC = () => {
                     onSave={handleSaveIdea}
                 />
             )}
+            <AuthModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+            />
         </div>
     );
 };

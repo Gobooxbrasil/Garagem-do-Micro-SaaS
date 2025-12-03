@@ -9,6 +9,7 @@ interface AuthContextType {
     isLoading: boolean;
     isAdmin: boolean;
     signOut: () => Promise<void>;
+    signInWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,8 +73,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAdmin(false);
     };
 
+    const signInWithGoogle = async () => {
+        await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin
+            }
+        });
+    };
+
     return (
-        <AuthContext.Provider value={{ session, user: session?.user || null, userAvatar, isLoading, isAdmin, signOut }}>
+        <AuthContext.Provider value={{ session, user: session?.user || null, userAvatar, isLoading, isAdmin, signOut, signInWithGoogle }}>
             {children}
         </AuthContext.Provider>
     );

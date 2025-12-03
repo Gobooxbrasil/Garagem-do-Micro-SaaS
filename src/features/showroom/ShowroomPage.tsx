@@ -12,6 +12,7 @@ import NewProjectModal from '../ideas/NewProjectModal';
 import IdeaDetailModal from '../ideas/IdeaDetailModal';
 import { Plus } from 'lucide-react';
 import { useCreateProject } from '../../hooks/useCreateProject';
+import { AuthModal } from '../../components/auth/AuthModal';
 
 const ShowroomPage: React.FC = () => {
     const { session } = useAuth();
@@ -26,6 +27,7 @@ const ShowroomPage: React.FC = () => {
     const [showroomMyProjects, setShowroomMyProjects] = useState(false);
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     const { data: response, isLoading } = useIdeas({
         onlyShowroom: true,
@@ -54,7 +56,10 @@ const ShowroomPage: React.FC = () => {
     const { create: createShowroom } = useCreateProject('showroom');
 
     const handleFavorite = (id: string) => {
-        if (!session) return alert('Faça login para favoritar');
+        if (!session) {
+            setIsAuthModalOpen(true);
+            return;
+        }
         const item = hydratedShowroomProjects.find(i => i.id === id);
         if (item) favMutation.mutate({ ideaId: id, userId: session.user.id, isFavorite: !!item.isFavorite }, {
             onError: (err) => {
@@ -65,7 +70,10 @@ const ShowroomPage: React.FC = () => {
     };
 
     const handleVote = (id: string) => {
-        if (!session) return alert('Faça login para votar');
+        if (!session) {
+            setIsAuthModalOpen(true);
+            return;
+        }
         voteMutation.mutate({ ideaId: id, userId: session.user.id }, {
             onError: (err) => {
                 console.error("Erro ao votar:", err);
@@ -81,7 +89,7 @@ const ShowroomPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Showroom</h1>
                     <p className="text-gray-500 text-lg font-light">Projetos reais construídos pela comunidade.</p>
                 </div>
-                <button onClick={() => session ? setIsProjectModalOpen(true) : alert('Faça login para enviar')} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
+                <button onClick={() => session ? setIsProjectModalOpen(true) : setIsAuthModalOpen(true)} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
                     <Plus className="w-5 h-5" /> Enviar Projeto
                 </button>
             </div>
@@ -106,7 +114,7 @@ const ShowroomPage: React.FC = () => {
                                 setShowroomShowFavs(false);
                                 setShowroomMyProjects(false);
                             }}
-                            onNewProject={() => session ? setIsProjectModalOpen(true) : alert('Faça login para enviar')}
+                            onNewProject={() => session ? setIsProjectModalOpen(true) : setIsAuthModalOpen(true)}
                         />
                     ) : (
                         <div className={showroomViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" : "flex flex-col gap-4"}>
@@ -165,6 +173,10 @@ const ShowroomPage: React.FC = () => {
                     refreshData={() => { }}
                 />
             )}
+            <AuthModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+            />
         </div>
     );
 };
