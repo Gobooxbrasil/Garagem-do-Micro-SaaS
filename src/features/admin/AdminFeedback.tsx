@@ -34,22 +34,22 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
         queryFn: async () => {
             // Usando a view ou tabela base fazendo join
             const { data, error } = await supabase
-                .from('feedback_items')
+                .from('feedbacks')
                 .select('*, profiles(full_name, email, avatar_url)')
                 .order('created_at', { ascending: false });
-            
+
             if (error) throw error;
             return data as FeedbackWithProfile[];
         }
     });
 
     // --- MUTATIONS ---
-    
+
     // Update Status
     const updateStatusMutation = useMutation({
         mutationFn: async ({ id, status }: { id: string; status: FeedbackStatus }) => {
             const { error } = await supabase
-                .from('feedback_items')
+                .from('feedbacks')
                 .update({ status })
                 .eq('id', id);
             if (error) throw error;
@@ -67,8 +67,8 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
             // Primeiro remove votos e comentários (se não tiver cascade no banco)
             await supabase.from('feedback_votes').delete().eq('feedback_id', id);
             await supabase.from('feedback_comments').delete().eq('feedback_id', id);
-            
-            const { error } = await supabase.from('feedback_items').delete().eq('id', id);
+
+            const { error } = await supabase.from('feedbacks').delete().eq('id', id);
             if (error) throw error;
         },
         onSuccess: () => {
@@ -104,9 +104,9 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
     // --- FILTERING ---
     const filteredData = useMemo(() => {
         if (!feedbacks) return [];
-        
+
         return feedbacks.filter(item => {
-            const matchesSearch = 
+            const matchesSearch =
                 item.title.toLowerCase().includes(search.toLowerCase()) ||
                 item.description.toLowerCase().includes(search.toLowerCase()) ||
                 item.profiles?.full_name?.toLowerCase().includes(search.toLowerCase());
@@ -130,23 +130,23 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            
+
             {/* Stats Summary */}
             <div className="grid grid-cols-4 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex items-center gap-4">
-                    <div className="p-2 bg-gray-100 rounded-lg"><MessageSquare className="w-5 h-5 text-gray-600"/></div>
+                    <div className="p-2 bg-gray-100 rounded-lg"><MessageSquare className="w-5 h-5 text-gray-600" /></div>
                     <div><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-gray-500 uppercase font-bold">Total</p></div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex items-center gap-4">
-                    <div className="p-2 bg-orange-50 rounded-lg"><Clock className="w-5 h-5 text-orange-600"/></div>
+                    <div className="p-2 bg-orange-50 rounded-lg"><Clock className="w-5 h-5 text-orange-600" /></div>
                     <div><p className="text-2xl font-bold">{stats.pending}</p><p className="text-xs text-gray-500 uppercase font-bold">Pendentes</p></div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex items-center gap-4">
-                    <div className="p-2 bg-blue-50 rounded-lg"><Circle className="w-5 h-5 text-blue-600"/></div>
+                    <div className="p-2 bg-blue-50 rounded-lg"><Circle className="w-5 h-5 text-blue-600" /></div>
                     <div><p className="text-2xl font-bold">{stats.planned}</p><p className="text-xs text-gray-500 uppercase font-bold">Em Andamento</p></div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex items-center gap-4">
-                    <div className="p-2 bg-green-50 rounded-lg"><CheckCircle2 className="w-5 h-5 text-green-600"/></div>
+                    <div className="p-2 bg-green-50 rounded-lg"><CheckCircle2 className="w-5 h-5 text-green-600" /></div>
                     <div><p className="text-2xl font-bold">{stats.completed}</p><p className="text-xs text-gray-500 uppercase font-bold">Entregues</p></div>
                 </div>
             </div>
@@ -155,9 +155,9 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
             <div className="flex flex-col xl:flex-row justify-between gap-4 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
                 <div className="relative w-full xl:w-96">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar feedback..." 
+                    <input
+                        type="text"
+                        placeholder="Buscar feedback..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-zinc-900/10 outline-none"
@@ -166,7 +166,7 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
                 <div className="flex gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
                         <Filter className="w-4 h-4 text-zinc-400" />
-                        <select 
+                        <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as any)}
                             className="bg-zinc-50 border border-zinc-200 rounded-lg py-2 px-3 text-sm focus:outline-none"
@@ -180,7 +180,7 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
                         </select>
                     </div>
                     <div className="flex items-center gap-2">
-                        <select 
+                        <select
                             value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value as any)}
                             className="bg-zinc-50 border border-zinc-200 rounded-lg py-2 px-3 text-sm focus:outline-none"
@@ -211,7 +211,7 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                             {isLoading ? (
-                                <tr><td colSpan={6} className="p-12 text-center text-zinc-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2"/>Carregando Roadmap...</td></tr>
+                                <tr><td colSpan={6} className="p-12 text-center text-zinc-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />Carregando Roadmap...</td></tr>
                             ) : filteredData.length === 0 ? (
                                 <tr><td colSpan={6} className="p-12 text-center text-zinc-500">Nenhum item encontrado.</td></tr>
                             ) : filteredData.map((item) => (
@@ -226,16 +226,15 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
                                     <td className="px-6 py-4">
                                         <div className="relative">
                                             {isUpdating === item.id && <div className="absolute right-2 top-2"><Loader2 className="w-3 h-3 animate-spin text-zinc-400" /></div>}
-                                            <select 
+                                            <select
                                                 value={item.status}
                                                 onChange={(e) => handleStatusChange(item.id, e.target.value as FeedbackStatus)}
-                                                className={`appearance-none pl-3 pr-8 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider cursor-pointer border focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                                                    item.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                    item.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                                    item.status === 'planned' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                    item.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' :
-                                                    'bg-gray-100 text-gray-600 border-gray-200'
-                                                }`}
+                                                className={`appearance-none pl-3 pr-8 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider cursor-pointer border focus:outline-none focus:ring-2 focus:ring-offset-1 ${item.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                        item.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                                            item.status === 'planned' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                item.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                                    'bg-gray-100 text-gray-600 border-gray-200'
+                                                    }`}
                                             >
                                                 <option value="pending">Pendente</option>
                                                 <option value="planned">Planejado</option>
@@ -254,7 +253,7 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
                                             <div className="w-6 h-6 rounded-full bg-zinc-200 overflow-hidden flex-shrink-0">
-                                                {item.profiles?.avatar_url ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-zinc-500">{item.profiles?.full_name?.[0]}</div>}
+                                                {item.profiles?.avatar_url ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-zinc-500">{item.profiles?.full_name?.[0]}</div>}
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-xs font-bold text-zinc-700">{item.profiles?.full_name || 'Anônimo'}</span>
@@ -263,13 +262,13 @@ const AdminFeedback: React.FC<AdminFeedbackProps> = ({ session }) => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button 
-                                            onClick={() => handleDelete(item.id)} 
+                                        <button
+                                            onClick={() => handleDelete(item.id)}
                                             disabled={isDeleting === item.id}
                                             className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                             title="Excluir Item"
                                         >
-                                            {isDeleting === item.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4"/>}
+                                            {isDeleting === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                         </button>
                                     </td>
                                 </tr>

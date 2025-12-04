@@ -82,12 +82,33 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
 
             if (error) throw error;
             alert('Validação resetada com sucesso!');
-            // Force refresh by invalidating queries would be ideal, but for now we rely on React Query's refetch or manual refresh
-            // A simple way is to reload or let the user know
             window.location.reload();
         } catch (err) {
             console.error('Error resetting validation:', err);
             alert('Erro ao resetar validação.');
+        }
+    };
+
+    const handleManualValidate = async (user: any) => {
+        if (!confirm(`Deseja VALIDAR MANUALMENTE o acesso de ${user.full_name}? Isso liberará o acesso à plataforma sem checagem do Telegram.`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    telegram_validated_at: new Date().toISOString(),
+                    last_telegram_check_at: new Date().toISOString(),
+                    is_in_telegram_group: true,
+                    telegram_user_id: 'manual_override_admin'
+                })
+                .eq('id', user.id);
+
+            if (error) throw error;
+            alert('Usuário validado manualmente com sucesso!');
+            window.location.reload();
+        } catch (err) {
+            console.error('Error manually validating:', err);
+            alert('Erro ao validar manualmente.');
         }
     };
 
@@ -127,7 +148,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
             {/* Table */}
             <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[900px]">
+                    <table className="w-full text-left">
                         <thead className="bg-zinc-50 border-b border-zinc-200">
                             <tr>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Usuário</th>
@@ -201,7 +222,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-zinc-500">
+                                    <td className="px-6 py-4 text-sm text-zinc-500 whitespace-nowrap">
                                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -235,6 +256,16 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
                                             >
                                                 <RefreshCw className="w-4 h-4" />
                                             </button>
+
+                                            {!user.telegram_validated_at && (
+                                                <button
+                                                    onClick={() => handleManualValidate(user)}
+                                                    className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
+                                                    title="Validar Manualmente (Override)"
+                                                >
+                                                    <ShieldCheck className="w-4 h-4" />
+                                                </button>
+                                            )}
 
                                             <button onClick={() => handleDelete(user)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg ml-2" title="Excluir Usuário (Cuidado!)"><Trash2 className="w-4 h-4" /></button>
                                         </div>

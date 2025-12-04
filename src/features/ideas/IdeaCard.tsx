@@ -3,48 +3,48 @@ import React, { useState } from 'react';
 import { Idea } from '../../types';
 import ShareButton from '../../components/ui/ShareButton';
 import { YouTubePreview, getYouTubeVideoId } from '../../components/ui/YouTubePreview';
-import { 
-  Heart,
-  Flame,
-  Activity, 
-  PawPrint, 
-  GraduationCap, 
-  Scale, 
-  Code2, 
-  Palette, 
-  ShoppingCart, 
-  Rocket, 
-  Briefcase, 
-  Tractor, 
-  Plane, 
-  Utensils, 
-  Truck,
-  Trash2,
-  Lightbulb,
-  DollarSign,
-  Gift,
-  Lock,
-  User,
-  Youtube,
-  Play,
-  X,
-  Video
+import {
+    Heart,
+    Flame,
+    Activity,
+    PawPrint,
+    GraduationCap,
+    Scale,
+    Code2,
+    Palette,
+    ShoppingCart,
+    Rocket,
+    Briefcase,
+    Tractor,
+    Plane,
+    Utensils,
+    Truck,
+    Trash2,
+    Lightbulb,
+    DollarSign,
+    Gift,
+    Lock,
+    User,
+    Youtube,
+    Play,
+    X,
+    Video
 } from 'lucide-react';
 
 interface IdeaCardProps {
-  idea: Idea;
-  onUpvote: (id: string) => void;
-  onToggleFavorite: (id: string) => void;
-  onDelete?: (id: string) => void;
-  viewMode: 'grid' | 'list';
-  onClick: (idea: Idea) => void;
-  currentUserId?: string;
+    idea: Idea;
+    onUpvote: (id: string) => void;
+    onToggleFavorite: (id: string) => void;
+    onDelete?: (id: string) => void;
+    viewMode: 'grid' | 'list';
+    onClick: (idea: Idea) => void;
+    currentUserId?: string;
 }
 
 // Visual Identity Helper
 export const getNicheVisuals = (niche: string) => {
     const n = niche.toLowerCase();
-    
+
     // Mapping rules
     if (n.includes('finan') || n.includes('money') || n.includes('banc')) return { icon: DollarSign, bg: 'bg-emerald-100', text: 'text-emerald-600' };
     if (n.includes('saúde') || n.includes('med') || n.includes('health') || n.includes('bem-estar')) return { icon: Activity, bg: 'bg-rose-100', text: 'text-rose-600' };
@@ -58,7 +58,7 @@ export const getNicheVisuals = (niche: string) => {
     if (n.includes('creator') || n.includes('video') || n.includes('design')) return { icon: Palette, bg: 'bg-pink-100', text: 'text-pink-600' };
     if (n.includes('commerce') || n.includes('loja')) return { icon: ShoppingCart, bg: 'bg-sky-100', text: 'text-sky-600' };
     if (n.includes('rh') || n.includes('recursos')) return { icon: Briefcase, bg: 'bg-teal-100', text: 'text-teal-600' };
-    if (n.includes('imob') || n.includes('casa')) return { icon: Briefcase, bg: 'bg-amber-100', text: 'text-amber-600' }; 
+    if (n.includes('imob') || n.includes('casa')) return { icon: Briefcase, bg: 'bg-amber-100', text: 'text-amber-600' };
     if (n.includes('aliment') || n.includes('food')) return { icon: Utensils, bg: 'bg-red-50', text: 'text-red-500' };
     if (n.includes('logíst') || n.includes('transp')) return { icon: Truck, bg: 'bg-cyan-100', text: 'text-cyan-600' };
     if (n.includes('turism') || n.includes('viage')) return { icon: Plane, bg: 'bg-blue-50', text: 'text-blue-500' };
@@ -68,268 +68,276 @@ export const getNicheVisuals = (niche: string) => {
 }
 
 const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, onDelete, viewMode, onClick, currentUserId }) => {
-  
-  const isList = viewMode === 'list';
-  const hasImage = idea.images && idea.images.length > 0 && idea.images[0] !== '';
-  const isOwner = currentUserId && idea.user_id === currentUserId;
-  const hasVotes = idea.votes_count > 0;
-  
-  // LÓGICA DE PRIORIDADE DO VÍDEO
-  // 1) Novo padrão unificado (youtube_url)
-  // 2) Legado do Showroom (showroom_video_url)
-  // 3) Legado das Ideias (youtube_video_url)
-  const videoUrl = idea.youtube_url || idea.showroom_video_url || idea.youtube_video_url;
-  
-  // Extração segura do ID para thumbnails e embeds
-  const videoId = getYouTubeVideoId(videoUrl || '');
-  const hasVideo = !!videoId;
-  
-  const visuals = getNicheVisuals(idea.niche);
-  const VisualIcon = visuals.icon;
 
-  // READ FROM FLATTENED STATS VIEW FIRST
-  const creatorName = idea.creator_name || idea.profiles?.full_name || 'Anônimo';
-  const creatorAvatar = idea.creator_avatar || idea.profiles?.avatar_url;
+    const isList = viewMode === 'list';
+    const hasImage = idea.images && idea.images.length > 0 && idea.images[0] !== '';
+    const isOwner = currentUserId && idea.user_id === currentUserId;
+    const hasVotes = idea.votes_count > 0;
 
-  const handleCardClick = (i: Idea) => {
-      onClick(i);
-  };
+    // LÓGICA DE PRIORIDADE DO VÍDEO
+    // 1) Novo padrão unificado (youtube_url)
+    // 2) Legado do Showroom (showroom_video_url)
+    // 3) Legado das Ideias (youtube_video_url)
+    const videoUrl = idea.youtube_url || idea.showroom_video_url || idea.youtube_video_url;
 
-  const renderMonetizationBadge = () => {
-    if (idea.payment_type === 'paid') {
+    // Extração segura do ID para thumbnails e embeds
+    const videoId = getYouTubeVideoId(videoUrl || '');
+    const hasVideo = !!videoId;
+
+    const visuals = getNicheVisuals(idea.niche);
+    const VisualIcon = visuals.icon;
+
+    // READ FROM FLATTENED STATS VIEW FIRST
+    const creatorName = idea.creator_name || idea.profiles?.full_name || 'Anônimo';
+    const creatorAvatar = idea.creator_avatar || idea.profiles?.avatar_url;
+
+    const handleCardClick = (i: Idea) => {
+        onClick(i);
+    };
+
+    const renderMonetizationBadge = () => {
+        if (idea.payment_type === 'paid') {
+            return (
+                <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> R$ {idea.price}
+                </div>
+            );
+        }
+        if (idea.payment_type === 'donation') {
+            return (
+                <div className="bg-blue-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
+                    <Gift className="w-3 h-3" /> Apoiar
+                </div>
+            );
+        }
+        return null;
+    };
+
+    const renderAuthor = () => (
+        <div className="flex items-center gap-2 group/author">
+            <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 border border-gray-100 shrink-0">
+                {creatorAvatar ? (
+                    <img src={creatorAvatar} alt={creatorName} className="w-full h-full object-cover" />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <User className="w-3 h-3" />
+                    </div>
+                )}
+            </div>
+            <span className="text-[10px] text-gray-400 font-medium truncate max-w-[100px] group-hover/author:text-gray-600 transition-colors">
+                {creatorName}
+            </span>
+        </div>
+    );
+
+    // LIST VIEW LAYOUT
+    if (isList) {
         return (
-            <div className="bg-green-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
-                <Lock className="w-3 h-3" /> R$ {idea.price}
+            <div
+                onClick={() => handleCardClick(idea)}
+                className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-start gap-4"
+            >
+                {/* Left: Image Thumbnail or Video Thumb or Icon */}
+                {/* AQUI: Se tiver imagem, mostra imagem. Se não, e tiver vídeo, mostra thumb do vídeo. */}
+                <div
+                    onClick={(e) => {
+                        // Se clicar na foto e for um vídeo (sem capa personalizada), abre o vídeo direto
+                        if (hasVideo && !hasImage) {
+                            e.stopPropagation();
+                            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+                        }
+                    }}
+                    className={`w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : (hasVideo ? 'bg-black' : visuals.bg)}`}
+                >
+                    {hasImage ? (
+                        <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
+                    ) : hasVideo ? (
+                        // LÓGICA VISUAL DO VÍDEO NA THUMBNAIL (Fallback se não tiver imagem)
+                        <>
+                            <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-80" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-6 h-6 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm">
+                                    <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <VisualIcon className={`w-6 h-6 ${visuals.text}`} />
+                    )}
+
+                    {/* Mini badge se tiver vídeo E imagem (indica que tem vídeo disponível) */}
+                    {hasVideo && hasImage && (
+                        <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md shadow-sm z-10">
+                            <Youtube className="w-2 h-2" />
+                        </div>
+                    )}
+                </div>
+
+                {/* Score */}
+                <div className="flex flex-col items-center min-w-[3rem] pt-1">
+                    <span className="text-xs font-bold text-gray-400 mb-1">Rank</span>
+                    <span className={`text-lg font-bold flex items-center gap-1 ${hasVotes ? 'text-orange-500' : 'text-gray-300'}`}>
+                        {idea.votes_count}
+                        <Flame className={`w-3 h-3 ${hasVotes ? 'fill-orange-500 animate-pulse' : 'text-gray-300'}`} />
+                    </span>
+                </div>
+
+                {/* Middle: Content */}
+                <div className="flex-grow min-w-0 border-l border-gray-100 pl-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 ${visuals.bg} ${visuals.text.replace('text-', 'text-opacity-80 text-')}`}>
+                            {idea.niche}
+                        </span>
+                        {idea.payment_type === 'paid' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
+                        {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
+                    </div>
+
+                    <h3 className="text-base font-bold text-apple-text truncate">{idea.title}</h3>
+
+                    <div className="flex items-center gap-3 mt-1 mb-2">
+                        <p className="text-xs text-gray-500 truncate max-w-[250px]">{idea.pain}</p>
+                        <span className="text-gray-300 text-[10px]">•</span>
+                        {renderAuthor()}
+                    </div>
+
+                    {/* LÓGICA PRINCIPAL: PLAYER DE VÍDEO NO CORPO DO CARD */}
+                    {/* Isso garante que o vídeo apareça MESMO se tiver imagem de capa na esquerda */}
+                    {hasVideo && (
+                        <div className="mt-4 pt-3 border-t border-dashed border-gray-100 max-w-lg">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
+                                <Video className="w-3 h-3" /> Apresentação
+                            </div>
+                            <YouTubePreview url={videoUrl} className="!mt-0 shadow-sm" />
+                        </div>
+                    )}
+                </div>
+
+                {/* Right: Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0 pt-1">
+                    <ShareButton idea={idea} variant="card" />
+                    {isOwner && onDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
+                            className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                            title="Excluir minha ideia"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
         );
     }
-    if (idea.payment_type === 'donation') {
-        return (
-            <div className="bg-blue-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm flex items-center gap-1">
-                <Gift className="w-3 h-3" /> Apoiar
-            </div>
-        );
-    }
-    return null;
-  };
 
-  const renderAuthor = () => (
-      <div className="flex items-center gap-2 group/author">
-          <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 border border-gray-100 shrink-0">
-              {creatorAvatar ? (
-                  <img src={creatorAvatar} alt={creatorName} className="w-full h-full object-cover" />
-              ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">
-                      <User className="w-3 h-3" />
-                  </div>
-              )}
-          </div>
-          <span className="text-[10px] text-gray-400 font-medium truncate max-w-[100px] group-hover/author:text-gray-600 transition-colors">
-              {creatorName}
-          </span>
-      </div>
-  );
-
-  // LIST VIEW LAYOUT
-  if (isList) {
+    // GRID VIEW LAYOUT
     return (
-      <div 
-        onClick={() => handleCardClick(idea)}
-        className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-start gap-4"
-      >
-        {/* Left: Image Thumbnail or Video Thumb or Icon */}
-        {/* AQUI: Se tiver imagem, mostra imagem. Se não, e tiver vídeo, mostra thumb do vídeo. */}
-        <div 
-            onClick={(e) => {
-                // Se clicar na foto e for um vídeo (sem capa personalizada), abre o vídeo direto
-                if (hasVideo && !hasImage) {
-                    e.stopPropagation();
-                    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
-                }
-            }}
-            className={`w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : (hasVideo ? 'bg-black' : visuals.bg)}`}
-        >
-             {hasImage ? (
-                 <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
-             ) : hasVideo ? (
-                 // LÓGICA VISUAL DO VÍDEO NA THUMBNAIL (Fallback se não tiver imagem)
-                 <>
-                    <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-80" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-6 h-6 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm">
-                            <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+        <div className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 flex flex-col h-full">
+
+            {/* Image Header */}
+            <div className={`h-32 w-full relative overflow-hidden cursor-pointer ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={() => handleCardClick(idea)}>
+
+                {hasImage ? (
+                    <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                ) : hasVideo ? (
+                    <div className="w-full h-full relative">
+                        <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-10 h-10 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                            </div>
                         </div>
                     </div>
-                 </>
-             ) : (
-                 <VisualIcon className={`w-6 h-6 ${visuals.text}`} />
-             )}
-             
-             {/* Mini badge se tiver vídeo E imagem (indica que tem vídeo disponível) */}
-             {hasVideo && hasImage && (
-                 <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md shadow-sm z-10">
-                     <Youtube className="w-2 h-2" />
-                 </div>
-             )}
-        </div>
-
-        {/* Score */}
-        <div className="flex flex-col items-center min-w-[3rem] pt-1">
-             <span className="text-xs font-bold text-gray-400 mb-1">Rank</span>
-             <span className={`text-lg font-bold flex items-center gap-1 ${hasVotes ? 'text-orange-500' : 'text-gray-300'}`}>
-                {idea.votes_count}
-                <Flame className={`w-3 h-3 ${hasVotes ? 'fill-orange-500 animate-pulse' : 'text-gray-300'}`} />
-             </span>
-        </div>
-
-        {/* Middle: Content */}
-        <div className="flex-grow min-w-0 border-l border-gray-100 pl-4">
-          <div className="flex items-center gap-2 mb-1">
-             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 ${visuals.bg} ${visuals.text.replace('text-', 'text-opacity-80 text-')}`}>
-              {idea.niche}
-            </span>
-            {idea.payment_type === 'paid' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
-            {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
-          </div>
-          
-          <h3 className="text-base font-bold text-apple-text truncate">{idea.title}</h3>
-          
-          <div className="flex items-center gap-3 mt-1 mb-2">
-             <p className="text-xs text-gray-500 truncate max-w-[250px]">{idea.pain}</p>
-             <span className="text-gray-300 text-[10px]">•</span>
-             {renderAuthor()}
-          </div>
-
-          {/* LÓGICA PRINCIPAL: PLAYER DE VÍDEO NO CORPO DO CARD */}
-          {/* Isso garante que o vídeo apareça MESMO se tiver imagem de capa na esquerda */}
-          {hasVideo && (
-              <div className="mt-4 pt-3 border-t border-dashed border-gray-100 max-w-lg">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
-                      <Video className="w-3 h-3" /> Apresentação
-                  </div>
-                  <YouTubePreview url={videoUrl} className="!mt-0 shadow-sm" />
-              </div>
-          )}
-        </div>
-
-        {/* Right: Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0 pt-1">
-            <ShareButton idea={idea} variant="card" />
-            {isOwner && onDelete && (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
-                    className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                    title="Excluir minha ideia"
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
-            )}
-        </div>
-      </div>
-    );
-  }
-
-  // GRID VIEW LAYOUT
-  return (
-    <div className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 flex flex-col h-full">
-      
-      {/* Image Header */}
-      <div className={`h-32 w-full relative overflow-hidden cursor-pointer ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={() => handleCardClick(idea)}>
-        
-        {hasImage ? (
-                <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-        ) : (
-                <div className="w-full h-full flex items-center justify-center transition-colors">
-                    <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
-                        <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center transition-colors">
+                        <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
+                            <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
+                        </div>
                     </div>
-                </div>
-        )}
-        
-        {/* Gradient Overlay */}
-        <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
-        
-        {/* Overlaid Tags (LEFT SIDE) */}
-        <div className="absolute top-3 left-3 flex gap-2 z-20">
-                {renderMonetizationBadge()}
-            <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
-                {idea.niche}
-            </span>
-        </div>
-        
-        {/* Actions Top Right (RIGHT SIDE) */}
-        <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                <ShareButton idea={idea} variant="card" />
-                {isOwner && onDelete && (
-                    <button 
-                    onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
-                    className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
-                    title="Excluir Projeto"
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
                 )}
-                <button 
-                onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
-                className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
-            >
-                <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-            </button>
-        </div>
-      </div>
 
-      <div className="p-5 flex flex-col flex-grow">
-        {/* Title */}
-        <h3 className="text-lg font-bold text-apple-text mb-2 leading-tight group-hover:text-apple-blue transition-colors cursor-pointer" onClick={() => handleCardClick(idea)}>
-            {idea.title}
-        </h3>
+                {/* Gradient Overlay */}
+                <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
 
-        {/* Pain Summary */}
-        <div className="flex-grow cursor-pointer" onClick={() => handleCardClick(idea)}>
-            <p className="text-sm text-gray-500 font-light line-clamp-2 leading-relaxed">
-                "{idea.pain}"
-            </p>
-        </div>
-
-        {/* Video Preview - Renderizado se tiver vídeo (Grid Mode) */}
-        {hasVideo && (
-            <div className="mb-4 mt-3">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
-                      <Video className="w-3 h-3" /> Apresentação
+                {/* Overlaid Tags (LEFT SIDE) */}
+                <div className="absolute top-3 left-3 flex gap-2 z-20">
+                    {renderMonetizationBadge()}
+                    <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
+                        {idea.niche}
+                    </span>
                 </div>
-                <YouTubePreview url={videoUrl} />
-            </div>
-        )}
 
-        {/* Footer: Votes & Action & Author */}
-        <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
-            <div className="flex items-center gap-3">
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
-                    disabled={idea.hasVoted}
-                    className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${
-                        idea.hasVoted 
-                        ? 'bg-orange-100 text-orange-600 cursor-default' 
-                        : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
-                    }`}
-                    title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
-                >
-                    <Flame className={`w-4 h-4 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
-                    <span className="text-xs font-bold">{idea.votes_count}</span>
-                </button>
-                {renderAuthor()}
+                {/* Actions Top Right (RIGHT SIDE) */}
+                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+                    <ShareButton idea={idea} variant="card" />
+                    {isOwner && onDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
+                            className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
+                            title="Excluir Projeto"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
+                        className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
+                    >
+                        <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                    </button>
+                </div>
             </div>
 
-            <button 
-                onClick={() => handleCardClick(idea)}
-                className="text-xs font-semibold text-apple-blue hover:text-apple-blueHover flex items-center gap-1 group/btn"
-            >
-                Ver Detalhes
-            </button>
+            <div className="p-5 flex flex-col flex-grow">
+                {/* Title */}
+                <h3 className="text-lg font-bold text-apple-text mb-2 leading-tight group-hover:text-apple-blue transition-colors cursor-pointer" onClick={() => handleCardClick(idea)}>
+                    {idea.title}
+                </h3>
+
+                {/* Pain Summary */}
+                <div className="flex-grow cursor-pointer" onClick={() => handleCardClick(idea)}>
+                    <p className="text-sm text-gray-500 font-light line-clamp-2 leading-relaxed">
+                        "{idea.pain}"
+                    </p>
+                </div>
+
+                {/* Video Preview - Renderizado se tiver vídeo (Grid Mode) */}
+                {hasVideo && (
+                    <div className="mb-4 mt-3">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
+                            <Video className="w-3 h-3" /> Apresentação
+                        </div>
+                        <YouTubePreview url={videoUrl} />
+                    </div>
+                )}
+
+                {/* Footer: Votes & Action & Author */}
+                <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
+                            disabled={idea.hasVoted}
+                            className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${idea.hasVoted
+                                    ? 'bg-orange-100 text-orange-600 cursor-default'
+                                    : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
+                                }`}
+                            title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
+                        >
+                            <Flame className={`w-4 h-4 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
+                            <span className="text-xs font-bold">{idea.votes_count}</span>
+                        </button>
+                        {renderAuthor()}
+                    </div>
+
+                    <button
+                        onClick={() => handleCardClick(idea)}
+                        className="text-xs font-semibold text-apple-blue hover:text-apple-blueHover flex items-center gap-1 group/btn"
+                    >
+                        Ver Detalhes
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default IdeaCard;

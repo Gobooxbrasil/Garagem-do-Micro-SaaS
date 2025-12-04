@@ -22,18 +22,27 @@ const RoadmapPage: React.FC = () => {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     const handleVote = (id: string) => {
+        console.log('[DEBUG] handleVote called for feedback:', id);
         if (!session) {
             setIsAuthModalOpen(true);
             return;
         }
-        feedbackVoteMutation.mutate({ feedbackId: id, userId: session.user.id, hasVoted: !!userFeedbackVotes?.has(id) });
+        const hasVoted = !!userFeedbackVotes?.has(id);
+        console.log('[DEBUG] hasVoted:', hasVoted, 'isPending:', feedbackVoteMutation.isPending);
+
+        if (feedbackVoteMutation.isPending) {
+            console.log('[DEBUG] Mutation already pending, ignoring click');
+            return;
+        }
+
+        feedbackVoteMutation.mutate({ feedbackId: id, userId: session.user.id, hasVoted });
     };
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-end mb-10 pb-6 border-b border-gray-100">
                 <div>
-                    <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Roadmap & Feedback</h1>
+                    <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Feedback & Roadmap</h1>
                     <p className="text-gray-500 text-lg font-light">Ajude a construir o futuro da plataforma.</p>
                 </div>
                 <button onClick={() => session ? setIsFeedbackModalOpen(true) : setIsAuthModalOpen(true)} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
@@ -78,6 +87,7 @@ const RoadmapPage: React.FC = () => {
                                     feedback={item}
                                     onClick={(id) => setSelectedFeedbackId(id)}
                                     hasVoted={userFeedbackVotes?.has(item.id) || false}
+                                    isVoting={feedbackVoteMutation.isPending}
                                     onVote={(e) => { e.stopPropagation(); handleVote(item.id); }}
                                 />
                             ))}

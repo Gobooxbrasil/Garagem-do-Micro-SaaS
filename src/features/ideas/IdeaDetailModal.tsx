@@ -508,16 +508,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                                             </div>
                                         </>
                                     )}
-
-                                    {/* VIDEO APRESENTAÇÃO */}
-                                    {youtubeId && (
-                                        <div className="mt-6">
-                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                                <Youtube className="w-4 h-4 text-red-500" /> Apresentação em Vídeo
-                                            </h3>
-                                            <YouTubePreview url={rawVideoUrl} />
-                                        </div>
-                                    )}
                                 </div>
 
                                 {!idea.is_showroom && (

@@ -1,9 +1,7 @@
 
 import React, { useState } from 'react';
 import { X, Send, Loader2, Sparkles } from 'lucide-react';
-import { useCreateProject } from '../../hooks/useCreateProject';
-import { useQueryClient } from '@tanstack/react-query';
-import { CACHE_KEYS } from '../../lib/cache-keys';
+import { useCreateFeedback } from '../../hooks/use-feedback';
 
 interface CreateFeedbackModalProps {
     isOpen: boolean;
@@ -12,8 +10,7 @@ interface CreateFeedbackModalProps {
 }
 
 export const CreateFeedbackModal: React.FC<CreateFeedbackModalProps> = ({ isOpen, onClose, userId }) => {
-    const { create: createFeedback, isCreating } = useCreateProject('roadmap');
-    const queryClient = useQueryClient();
+    const createFeedbackMutation = useCreateFeedback();
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -24,12 +21,15 @@ export const CreateFeedbackModal: React.FC<CreateFeedbackModalProps> = ({ isOpen
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const success = await createFeedback({ ...formData, user_id: userId });
-        if (success) {
-            queryClient.invalidateQueries({ queryKey: CACHE_KEYS.feedback.all });
-            onClose();
-            setFormData({ title: '', description: '', type: 'feature' });
-        }
+        createFeedbackMutation.mutate(
+            { ...formData, user_id: userId },
+            {
+                onSuccess: () => {
+                    onClose();
+                    setFormData({ title: '', description: '', type: 'feature' });
+                }
+            }
+        );
     };
 
     return (
@@ -88,10 +88,10 @@ export const CreateFeedbackModal: React.FC<CreateFeedbackModalProps> = ({ isOpen
                     <div className="pt-2 flex justify-end">
                         <button
                             type="submit"
-                            disabled={isCreating}
+                            disabled={createFeedbackMutation.isPending}
                             className="bg-black text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50 transition-all shadow-lg shadow-black/10"
                         >
-                            {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            {createFeedbackMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             Enviar Sugestão
                         </button>
                     </div>

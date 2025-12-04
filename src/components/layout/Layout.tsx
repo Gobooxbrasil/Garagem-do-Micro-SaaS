@@ -95,8 +95,8 @@ export const Layout: React.FC = () => {
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex bg-gray-100/50 p-1 rounded-full mr-4 border border-gray-200/50">
                             <button onClick={() => navigate('/ideas')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/ideas') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Lightbulb className="w-4 h-4" />Ideias</button>
-                            <button onClick={() => navigate('/showroom')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/showroom') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Rocket className="w-4 h-4" />Showroom</button>
-                            <button onClick={() => navigate('/roadmap')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/roadmap') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Map className="w-4 h-4" /> Roadmap</button>
+                            <button onClick={() => navigate('/showroom')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/showroom') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Rocket className="w-4 h-4" />Projetos</button>
+                            <button onClick={() => navigate('/roadmap')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/roadmap') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Map className="w-4 h-4" /> Feedback</button>
                             <button onClick={() => navigate('/downloads')} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${isActive('/downloads') ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}><Download className="w-4 h-4" /> Arquivos</button>
                         </div>
 

@@ -18,38 +18,35 @@ export const useCreateProject = (projectType: ProjectType) => {
                 return false;
             }
 
-            const { data, error } = await supabase.functions.invoke('queue_project_creation', {
-                body: {
-                    user_id: user.id,
-                    project_type: projectType,
-                    payload: {
-                        ...payload,
-                        user_id: user.id // Ensure user_id is in payload
-                    }
-                }
-            });
+            // Direct database insert instead of Edge Function
+            const insertData: any = {
+                ...payload,
+                user_id: user.id,
+                votes_count: 0,
+                is_building: false,
+                short_id: Math.random().toString(36).substring(2, 8).toUpperCase(),
+                created_at: new Date().toISOString()
+            };
 
-            if (error) {
-                // Supabase functions error (network, etc)
-                console.error('Function invocation error:', error);
-                // Check if it's a 429 from our function (though invoke usually wraps it)
-                // If the function returns a 429 response, supabase-js might treat it as an error or data depending on version.
-                // Usually `error` object contains status.
-                if (error instanceof Error && error.message.includes('429')) {
-                    toast.error('Você atingiu o limite de 10 criações por hora.');
-                    return false;
-                }
-                // Fallback for other errors
-                toast.error('Erro ao conectar com o servidor.');
-                return false;
+            // Set flags based on project type
+            if (projectType === 'showroom') {
+                insertData.is_showroom = true;
             }
 
-            // Check for application level error returned in body
-            if (data && data.error) {
-                if (data.error.includes('Limite de criação atingido')) {
-                    toast.error('Você atingiu o limite de 10 criações por hora.');
+            const { data, error } = await supabase
+                .from('ideas')
+                .insert(insertData)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Database insert error:', error);
+
+                // Handle specific error codes
+                if (error.code === '23505') {
+                    toast.error('Já existe um projeto com esses dados.');
                 } else {
-                    toast.error(`Erro: ${data.error}`);
+                    toast.error('Erro ao criar projeto: ' + error.message);
                 }
                 return false;
             }
