@@ -137,55 +137,58 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
                 onClick={() => handleCardClick(idea)}
                 className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-start gap-4"
             >
-                {/* Left: Image Thumbnail or Video Thumb or Icon */}
-                {/* AQUI: Se tiver imagem, mostra imagem. Se não, e tiver vídeo, mostra thumb do vídeo. */}
-                <div
-                    onClick={(e) => {
-                        // Se clicar na foto e for um vídeo (sem capa personalizada), abre o vídeo direto
-                        if (hasVideo && !hasImage) {
-                            e.stopPropagation();
-                            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
-                        }
-                    }}
-                    className={`w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : (hasVideo ? 'bg-black' : visuals.bg)}`}
-                >
-                    {hasImage ? (
-                        <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
-                    ) : hasVideo ? (
-                        // LÓGICA VISUAL DO VÍDEO NA THUMBNAIL (Fallback se não tiver imagem)
-                        <>
-                            <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-80" />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="w-6 h-6 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm">
-                                    <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                {/* Left: Image Thumbnail or Video Thumb or Icon + Vote Button Below */}
+                <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                    {/* Icon/Image */}
+                    <div
+                        onClick={(e) => {
+                            // Se clicar na foto e for um vídeo (sem capa personalizada), abre o vídeo direto
+                            if (hasVideo && !hasImage) {
+                                e.stopPropagation();
+                                window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+                            }
+                        }}
+                        className={`w-16 h-16 rounded-lg overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : (hasVideo ? 'bg-black' : visuals.bg)}`}
+                    >
+                        {hasImage ? (
+                            <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
+                        ) : hasVideo ? (
+                            // LÓGICA VISUAL DO VÍDEO NA THUMBNAIL (Fallback se não tiver imagem)
+                            <>
+                                <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-80" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-6 h-6 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm">
+                                        <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                                    </div>
                                 </div>
+                            </>
+                        ) : (
+                            <VisualIcon className={`w-7 h-7 ${visuals.text}`} />
+                        )}
+
+                        {/* Mini badge se tiver vídeo E imagem (indica que tem vídeo disponível) */}
+                        {hasVideo && hasImage && (
+                            <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md shadow-sm z-10">
+                                <Youtube className="w-2 h-2" />
                             </div>
-                        </>
-                    ) : (
-                        <VisualIcon className={`w-6 h-6 ${visuals.text}`} />
-                    )}
+                        )}
+                    </div>
 
-                    {/* Mini badge se tiver vídeo E imagem (indica que tem vídeo disponível) */}
-                    {hasVideo && hasImage && (
-                        <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md shadow-sm z-10">
-                            <Youtube className="w-2 h-2" />
-                        </div>
-                    )}
+                    {/* Vote Button - Compact Design Below Icon */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
+                        disabled={idea.hasVoted}
+                        className={`w-16 py-1.5 rounded-lg transition-all text-center ${idea.hasVoted
+                                ? 'bg-orange-100 text-orange-600 cursor-default'
+                                : 'bg-gray-50 hover:bg-orange-50 text-gray-500 hover:text-orange-500 border border-gray-200 hover:border-orange-300'
+                            }`}
+                        title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
+                    >
+                        <Flame className={`w-4 h-4 mx-auto mb-0.5 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-400'}`} />
+                        <div className="text-[10px] font-bold uppercase tracking-wide">{idea.hasVoted ? 'Votado' : 'Votar'}</div>
+                        <div className="text-sm font-bold">{idea.votes_count}</div>
+                    </button>
                 </div>
-
-                {/* Vote Button */}
-                <button
-                    onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
-                    disabled={idea.hasVoted}
-                    className={`flex flex-col items-center min-w-[3.5rem] py-2 px-3 rounded-lg transition-all ${idea.hasVoted
-                            ? 'bg-orange-100 text-orange-600 cursor-default'
-                            : 'bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-orange-500 hover:border-orange-200'
-                        } border border-transparent`}
-                    title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
-                >
-                    <Flame className={`w-5 h-5 mb-1 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
-                    <span className="text-sm font-bold">{idea.votes_count}</span>
-                </button>
 
                 {/* Middle: Content */}
                 <div className="flex-grow min-w-0 border-l border-gray-100 pl-4">
@@ -221,6 +224,13 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
 
                 {/* Right: Actions */}
                 <div className="flex items-center gap-2 flex-shrink-0 pt-1">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
+                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                        title={idea.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                    >
+                        <Heart className={`w-5 h-5 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                    </button>
                     <ShareButton idea={idea} variant="card" />
                     {isOwner && onDelete && (
                         <button
