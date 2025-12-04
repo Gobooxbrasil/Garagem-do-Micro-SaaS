@@ -16,10 +16,11 @@ const TelegramBlockScreen: React.FC<TelegramBlockScreenProps> = ({ onValidate })
         try {
             const result = await onValidate();
             if (!result) {
-                setError('Você ainda não está no grupo. Por favor, entre no grupo e tente novamente.');
+                setError('Você ainda não está no grupo do Telegram. Por favor, entre no grupo usando o botão acima e tente novamente.');
             }
         } catch (err) {
-            setError('Erro ao validar. Tente novamente.');
+            console.error('Validation error:', err);
+            setError('Erro ao validar. Verifique se você conectou sua conta do Telegram e está no grupo.');
         } finally {
             setIsValidating(false);
         }

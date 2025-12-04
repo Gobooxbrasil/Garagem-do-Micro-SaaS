@@ -35,13 +35,18 @@ export const TelegramGuard: React.FC<TelegramGuardProps> = ({ children }) => {
 
             if (error) {
                 // Se a coluna não existe (erro 42703), libera acesso
+                // Isso é apenas para retrocompatibilidade durante migração
                 if (error.code === '42703' || error.message.includes('column')) {
                     console.warn('Telegram validation columns not found, allowing access');
                     setNeedsToJoin(false);
                     setLoading(false);
                     return;
                 }
-                throw error;
+                // Para outros erros, BLOQUEIA acesso (fail-closed)
+                console.error('Error checking access:', error);
+                setNeedsToJoin(true);
+                setLoading(false);
+                return;
             }
 
             // Se ainda não validou, mostra tela de entrada
@@ -52,8 +57,8 @@ export const TelegramGuard: React.FC<TelegramGuardProps> = ({ children }) => {
             }
         } catch (error) {
             console.error('Error checking access:', error);
-            // Em caso de erro, libera acesso (fail-open)
-            setNeedsToJoin(false);
+            // Em caso de erro, BLOQUEIA acesso (fail-closed) - SEGURANÇA
+            setNeedsToJoin(true);
         } finally {
             setLoading(false);
         }
@@ -61,20 +66,59 @@ export const TelegramGuard: React.FC<TelegramGuardProps> = ({ children }) => {
 
     const handleValidate = async (): Promise<boolean> => {
         try {
-            // Marca como validado
-            const { error } = await supabase
+            // Primeiro, busca o telegram_user_id do perfil
+            const { data: profile, error: profileError } = await supabase
                 .from('profiles')
-                .update({
-                    is_in_telegram_group: true,
-                    last_telegram_check_at: new Date().toISOString(),
-                    telegram_validated_at: new Date().toISOString(),
-                })
-                .eq('id', session?.user?.id || '');
+                .select('telegram_user_id')
+                .eq('id', session?.user?.id || '')
+                .single();
 
-            if (error) throw error;
+            if (profileError) {
+                console.error('Error fetching profile:', profileError);
+                return false;
+            }
 
-            setNeedsToJoin(false);
-            return true;
+            if (!profile?.telegram_user_id) {
+                console.error('Telegram user ID not found. User needs to connect Telegram first.');
+                return false;
+            }
+
+            // Chama a Edge Function para verificar membership real
+            const { data: authData } = await supabase.auth.getSession();
+            const token = authData?.session?.access_token;
+
+            if (!token) {
+                console.error('No auth token available');
+                return false;
+            }
+
+            const response = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-check-membership`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ telegram_user_id: profile.telegram_user_id }),
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                console.error('Membership check failed:', result);
+                return false;
+            }
+
+            // A Edge Function já atualiza o banco de dados
+            // Apenas retorna o resultado
+            if (result.allowed) {
+                setNeedsToJoin(false);
+                return true;
+            }
+
+            return false;
         } catch (error) {
             console.error('Error validating:', error);
             return false;
