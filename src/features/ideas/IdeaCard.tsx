@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Idea } from '../../types';
 import ShareButton from '../../components/ui/ShareButton';
 import { YouTubePreview, getYouTubeVideoId } from '../../components/ui/YouTubePreview';
+import { VideoModal } from '../../components/ui/VideoModal';
 import {
     Heart,
     Flame,
@@ -73,6 +74,7 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
     const hasImage = idea.images && idea.images.length > 0 && idea.images[0] !== '';
     const isOwner = currentUserId && idea.user_id === currentUserId;
     const hasVotes = idea.votes_count > 0;
+    const [videoModalOpen, setVideoModalOpen] = useState(false);
 
     // LÓGICA DE PRIORIDADE DO VÍDEO
     // 1) Novo padrão unificado (youtube_url)
@@ -133,228 +135,229 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
     // LIST VIEW LAYOUT
     if (isList) {
         return (
-            <div
-                onClick={() => handleCardClick(idea)}
-                className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-start gap-4"
-            >
-                {/* Left: Image Thumbnail or Video Thumb or Icon + Vote Button Below */}
-                <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                    {/* Icon/Image */}
-                    <div
-                        onClick={(e) => {
-                            // Se clicar na foto e for um vídeo (sem capa personalizada), abre o vídeo direto
-                            if (hasVideo && !hasImage) {
-                                e.stopPropagation();
-                                window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
-                            }
-                        }}
-                        className={`w-16 h-16 rounded-lg overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : (hasVideo ? 'bg-black' : visuals.bg)}`}
-                    >
-                        {hasImage ? (
-                            <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
-                        ) : hasVideo ? (
-                            // LÓGICA VISUAL DO VÍDEO NA THUMBNAIL (Fallback se não tiver imagem)
-                            <>
-                                <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-80" />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="w-6 h-6 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm">
-                                        <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+            <>
+                <div
+                    onClick={() => handleCardClick(idea)}
+                    className="group cursor-pointer bg-white rounded-xl p-4 border border-gray-100 hover:border-apple-blue/30 hover:shadow-md transition-all duration-200 flex items-start gap-4"
+                >
+                    {/* Left: Image Thumbnail or Video Thumb or Icon + Vote Button Below */}
+                    <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                        {/* Icon/Image */}
+                        <div
+                            onClick={(e) => {
+                                // Se clicar na foto e for um vídeo (sem capa personalizada), abre o modal de vídeo
+                                if (hasVideo && !hasImage) {
+                                    e.stopPropagation();
+                                    setVideoModalOpen(true);
+                                }
+                            }}
+                            className={`w-16 h-16 rounded-lg overflow-hidden border border-gray-100 flex items-center justify-center relative ${hasImage ? 'bg-gray-50' : (hasVideo ? 'bg-black' : visuals.bg)}`}
+                        >
+                            {hasImage ? (
+                                <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover" />
+                            ) : hasVideo ? (
+                                // LÓGICA VISUAL DO VÍDEO NA THUMBNAIL (Fallback se não tiver imagem)
+                                <>
+                                    <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-80" />
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-6 h-6 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm">
+                                            <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                                        </div>
                                     </div>
+                                </>
+                            ) : (
+                                <VisualIcon className={`w-7 h-7 ${visuals.text}`} />
+                            )}
+
+                            {/* Mini badge se tiver vídeo E imagem (indica que tem vídeo disponível) */}
+                            {hasVideo && hasImage && (
+                                <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md shadow-sm z-10">
+                                    <Youtube className="w-2 h-2" />
                                 </div>
-                            </>
-                        ) : (
-                            <VisualIcon className={`w-7 h-7 ${visuals.text}`} />
-                        )}
-
-                        {/* Mini badge se tiver vídeo E imagem (indica que tem vídeo disponível) */}
-                        {hasVideo && hasImage && (
-                            <div className="absolute bottom-0 right-0 bg-red-600 text-white p-0.5 rounded-tl-md shadow-sm z-10">
-                                <Youtube className="w-2 h-2" />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Vote Button - Compact Design Below Icon */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
-                        disabled={idea.hasVoted}
-                        className={`w-16 py-1.5 rounded-lg transition-all text-center ${idea.hasVoted
-                                ? 'bg-orange-100 text-orange-600 cursor-default'
-                                : 'bg-gray-50 hover:bg-orange-50 text-gray-500 hover:text-orange-500 border border-gray-200 hover:border-orange-300'
-                            }`}
-                        title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
-                    >
-                        <Flame className={`w-4 h-4 mx-auto mb-0.5 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-400'}`} />
-                        <div className="text-[10px] font-bold uppercase tracking-wide">{idea.hasVoted ? 'Votado' : 'Votar'}</div>
-                        <div className="text-sm font-bold">{idea.votes_count}</div>
-                    </button>
-                </div>
-
-                {/* Middle: Content */}
-                <div className="flex-grow min-w-0 border-l border-gray-100 pl-4">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 ${visuals.bg} ${visuals.text.replace('text-', 'text-opacity-80 text-')}`}>
-                            {idea.niche}
-                        </span>
-                        {idea.payment_type === 'paid' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
-                        {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
-                    </div>
-
-                    <h3 className="text-base font-bold text-apple-text mb-2 line-clamp-1">{idea.title}</h3>
-
-                    <p className="text-sm text-gray-600 line-clamp-2 mb-3 leading-relaxed">{idea.pain}</p>
-
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                        {renderAuthor()}
-                        <span>•</span>
-                        <span>{new Date(idea.created_at).toLocaleDateString()}</span>
-                    </div>
-
-                    {/* LÓGICA PRINCIPAL: PLAYER DE VÍDEO NO CORPO DO CARD */}
-                    {/* Isso garante que o vídeo apareça MESMO se tiver imagem de capa na esquerda */}
-                    {hasVideo && (
-                        <div className="mt-4 pt-3 border-t border-dashed border-gray-100 max-w-lg">
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
-                                <Video className="w-3 h-3" /> Apresentação
-                            </div>
-                            <YouTubePreview url={videoUrl} className="!mt-0 shadow-sm" />
+                            )}
                         </div>
-                    )}
-                </div>
 
-                {/* Right: Actions */}
-                <div className="flex items-center gap-2 flex-shrink-0 pt-1">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
-                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                        title={idea.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-                    >
-                        <Heart className={`w-5 h-5 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                    </button>
-                    <ShareButton idea={idea} variant="card" />
-                    {isOwner && onDelete && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
-                            className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                            title="Excluir minha ideia"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    // GRID VIEW LAYOUT
-    return (
-        <div className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 flex flex-col h-full">
-
-            {/* Image Header */}
-            <div className={`h-32 w-full relative overflow-hidden cursor-pointer ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={() => handleCardClick(idea)}>
-
-                {hasImage ? (
-                    <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                ) : hasVideo ? (
-                    <div className="w-full h-full relative">
-                        <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-10 h-10 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                <Play className="w-5 h-5 text-white fill-white ml-0.5" />
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center transition-colors">
-                        <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
-                            <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
-                        </div>
-                    </div>
-                )}
-
-                {/* Gradient Overlay */}
-                <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
-
-                {/* Overlaid Tags (LEFT SIDE) */}
-                <div className="absolute top-3 left-3 flex gap-2 z-20">
-                    {renderMonetizationBadge()}
-                    <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
-                        {idea.niche}
-                    </span>
-                </div>
-
-                {/* Actions Top Right (RIGHT SIDE) */}
-                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                    <ShareButton idea={idea} variant="card" />
-                    {isOwner && onDelete && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
-                            className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
-                            title="Excluir Projeto"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    )}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
-                        className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
-                    >
-                        <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                    </button>
-                </div>
-            </div>
-
-            <div className="p-5 flex flex-col flex-grow">
-                {/* Title */}
-                <h3 className="text-lg font-bold text-apple-text mb-2 leading-tight group-hover:text-apple-blue transition-colors cursor-pointer" onClick={() => handleCardClick(idea)}>
-                    {idea.title}
-                </h3>
-
-                {/* Pain Summary */}
-                <div className="flex-grow cursor-pointer" onClick={() => handleCardClick(idea)}>
-                    <p className="text-sm text-gray-500 font-light line-clamp-2 leading-relaxed">
-                        "{idea.pain}"
-                    </p>
-                </div>
-
-                {/* Video Preview - Renderizado se tiver vídeo (Grid Mode) */}
-                {hasVideo && (
-                    <div className="mb-4 mt-3">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
-                            <Video className="w-3 h-3" /> Apresentação
-                        </div>
-                        <YouTubePreview url={videoUrl} />
-                    </div>
-                )}
-
-                {/* Footer: Votes & Action & Author */}
-                <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
-                    <div className="flex items-center gap-3">
+                        {/* Vote Button - Compact Design Below Icon */}
                         <button
                             onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
                             disabled={idea.hasVoted}
-                            className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${idea.hasVoted
+                            className={`w-16 py-1.5 rounded-lg transition-all text-center ${idea.hasVoted
                                 ? 'bg-orange-100 text-orange-600 cursor-default'
-                                : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
+                                : 'bg-gray-50 hover:bg-orange-50 text-gray-500 hover:text-orange-500 border border-gray-200 hover:border-orange-300'
                                 }`}
                             title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
                         >
-                            <Flame className={`w-4 h-4 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
-                            <span className="text-xs font-bold">{idea.votes_count}</span>
+                            <Flame className={`w-4 h-4 mx-auto mb-0.5 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-400'}`} />
+                            <div className="text-[10px] font-bold uppercase tracking-wide">{idea.hasVoted ? 'Votado' : 'Votar'}</div>
+                            <div className="text-sm font-bold">{idea.votes_count}</div>
                         </button>
-                        {renderAuthor()}
                     </div>
 
-                    <button
-                        onClick={() => handleCardClick(idea)}
-                        className="text-xs font-semibold text-apple-blue hover:text-apple-blueHover flex items-center gap-1 group/btn"
-                    >
-                        Ver Detalhes
-                    </button>
+                    {/* Middle: Content */}
+                    <div className="flex-grow min-w-0 border-l border-gray-100 pl-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 ${visuals.bg} ${visuals.text.replace('text-', 'text-opacity-80 text-')}`}>
+                                {idea.niche}
+                            </span>
+                            {idea.payment_type === 'paid' && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">R$ {idea.price}</span>}
+                            {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
+                        </div>
+
+                        <h3 className="text-base font-bold text-apple-text mb-2 line-clamp-1">{idea.title}</h3>
+
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-3 leading-relaxed">{idea.pain}</p>
+
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                            {renderAuthor()}
+                            <span>•</span>
+                            <span>{new Date(idea.created_at).toLocaleDateString()}</span>
+                        </div>
+
+                        {/* LÓGICA PRINCIPAL: PLAYER DE VÍDEO NO CORPO DO CARD */}
+                        {/* Isso garante que o vídeo apareça MESMO se tiver imagem de capa na esquerda */}
+                        {hasVideo && (
+                            <div className="mt-4 pt-3 border-t border-dashed border-gray-100 max-w-lg">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
+                                    <Video className="w-3 h-3" /> Apresentação
+                                </div>
+                                <YouTubePreview url={videoUrl} className="!mt-0 shadow-sm" />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0 pt-1">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
+                            className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                            title={idea.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                        >
+                            <Heart className={`w-5 h-5 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                        </button>
+                        <ShareButton idea={idea} variant="card" />
+                        {isOwner && onDelete && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
+                                className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                title="Excluir minha ideia"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
                 </div>
-            </div>
-        </div>
-    );
+                );
+    }
+
+                // GRID VIEW LAYOUT
+                return (
+                <div className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 flex flex-col h-full">
+
+                    {/* Image Header */}
+                    <div className={`h-32 w-full relative overflow-hidden cursor-pointer ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={() => handleCardClick(idea)}>
+
+                        {hasImage ? (
+                            <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                        ) : hasVideo ? (
+                            <div className="w-full h-full relative">
+                                <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-10 h-10 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                        <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center transition-colors">
+                                <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
+                                    <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Gradient Overlay */}
+                        <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
+
+                        {/* Overlaid Tags (LEFT SIDE) */}
+                        <div className="absolute top-3 left-3 flex gap-2 z-20">
+                            {renderMonetizationBadge()}
+                            <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
+                                {idea.niche}
+                            </span>
+                        </div>
+
+                        {/* Actions Top Right (RIGHT SIDE) */}
+                        <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+                            <ShareButton idea={idea} variant="card" />
+                            {isOwner && onDelete && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
+                                    className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
+                                    title="Excluir Projeto"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            )}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
+                                className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
+                            >
+                                <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="p-5 flex flex-col flex-grow">
+                        {/* Title */}
+                        <h3 className="text-lg font-bold text-apple-text mb-2 leading-tight group-hover:text-apple-blue transition-colors cursor-pointer" onClick={() => handleCardClick(idea)}>
+                            {idea.title}
+                        </h3>
+
+                        {/* Pain Summary */}
+                        <div className="flex-grow cursor-pointer" onClick={() => handleCardClick(idea)}>
+                            <p className="text-sm text-gray-500 font-light line-clamp-2 leading-relaxed">
+                                "{idea.pain}"
+                            </p>
+                        </div>
+
+                        {/* Video Preview - Renderizado se tiver vídeo (Grid Mode) */}
+                        {hasVideo && (
+                            <div className="mb-4 mt-3">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
+                                    <Video className="w-3 h-3" /> Apresentação
+                                </div>
+                                <YouTubePreview url={videoUrl} />
+                            </div>
+                        )}
+
+                        {/* Footer: Votes & Action & Author */}
+                        <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
+                                    disabled={idea.hasVoted}
+                                    className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${idea.hasVoted
+                                        ? 'bg-orange-100 text-orange-600 cursor-default'
+                                        : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
+                                        }`}
+                                    title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
+                                >
+                                    <Flame className={`w-4 h-4 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
+                                    <span className="text-xs font-bold">{idea.votes_count}</span>
+                                </button>
+                                {renderAuthor()}
+                            </div>
+
+                            <button
+                                onClick={() => handleCardClick(idea)}
+                                className="text-xs font-semibold text-apple-blue hover:text-apple-blueHover flex items-center gap-1 group/btn"
+                            >
+                                Ver Detalhes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                );
 };
 
-export default IdeaCard;
+                export default IdeaCard;
