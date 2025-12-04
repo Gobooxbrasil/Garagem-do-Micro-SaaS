@@ -86,7 +86,7 @@ const ShowroomPage: React.FC = () => {
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-end mb-10 pb-6 border-b border-gray-100">
                 <div>
-                    <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Showroom</h1>
+                    <h1 className="text-3xl font-bold text-apple-text tracking-tight mb-2">Projetos</h1>
                     <p className="text-gray-500 text-lg font-light">Projetos reais construídos pela comunidade.</p>
                 </div>
                 <button onClick={() => session ? setIsProjectModalOpen(true) : setIsAuthModalOpen(true)} className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-medium shadow-xl shadow-black/20 transition-all hover:scale-105 flex items-center gap-2">
@@ -102,6 +102,13 @@ const ShowroomPage: React.FC = () => {
                 sortBy={showroomSort} setSortBy={setShowroomSort}
                 myProjects={showroomMyProjects} setMyProjects={setShowroomMyProjects}
                 requireAuth={() => !!session}
+                onClearFilters={() => {
+                    setShowroomSearch('');
+                    setShowroomCategory('Todos');
+                    setShowroomShowFavs(false);
+                    setShowroomMyProjects(false);
+                    setShowroomSort('votes');
+                }}
             />
 
             {isLoading ? <IdeasListSkeleton /> : (
