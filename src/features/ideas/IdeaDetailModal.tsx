@@ -425,13 +425,6 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Video Preview - Full Size */}
-                        {youtubeId && (
-                            <div className="mb-6">
-                                <YouTubePreview url={rawVideoUrl} />
-                            </div>
-                        )}
-
                         {/* Gallery Thumbnails Strip & Video Card */}
                         {(galleryImages.length > 0 || youtubeId) && (
                             <div className="flex gap-3 overflow-x-auto pb-4 mb-6 custom-scrollbar">
