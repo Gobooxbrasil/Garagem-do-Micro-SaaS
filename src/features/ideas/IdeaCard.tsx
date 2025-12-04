@@ -246,118 +246,128 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
                         )}
                     </div>
                 </div>
-                );
+
+                {/* Video Modal */}
+                {hasVideo && videoId && (
+                    <VideoModal
+                        videoId={videoId}
+                        isOpen={videoModalOpen}
+                        onClose={() => setVideoModalOpen(false)}
+                    />
+                )}
+            </>
+        );
     }
 
-                // GRID VIEW LAYOUT
-                return (
-                <div className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 flex flex-col h-full">
+    // GRID VIEW LAYOUT
+    return (
+        <div className="group relative bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 flex flex-col h-full">
 
-                    {/* Image Header */}
-                    <div className={`h-32 w-full relative overflow-hidden cursor-pointer ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={() => handleCardClick(idea)}>
+            {/* Image Header */}
+            <div className={`h-32 w-full relative overflow-hidden cursor-pointer ${hasImage ? 'bg-gray-50' : visuals.bg}`} onClick={() => handleCardClick(idea)}>
 
-                        {hasImage ? (
-                            <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                        ) : hasVideo ? (
-                            <div className="w-full h-full relative">
-                                <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="w-10 h-10 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                        <Play className="w-5 h-5 text-white fill-white ml-0.5" />
-                                    </div>
-                                </div>
+                {hasImage ? (
+                    <img src={idea.images![0]} alt={idea.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                ) : hasVideo ? (
+                    <div className="w-full h-full relative">
+                        <img src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`} alt="Video Thumb" className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-10 h-10 bg-red-600/90 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                <Play className="w-5 h-5 text-white fill-white ml-0.5" />
                             </div>
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center transition-colors">
-                                <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
-                                    <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Gradient Overlay */}
-                        <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
-
-                        {/* Overlaid Tags (LEFT SIDE) */}
-                        <div className="absolute top-3 left-3 flex gap-2 z-20">
-                            {renderMonetizationBadge()}
-                            <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
-                                {idea.niche}
-                            </span>
-                        </div>
-
-                        {/* Actions Top Right (RIGHT SIDE) */}
-                        <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                            <ShareButton idea={idea} variant="card" />
-                            {isOwner && onDelete && (
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
-                                    className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
-                                    title="Excluir Projeto"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            )}
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
-                                className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
-                            >
-                                <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                            </button>
                         </div>
                     </div>
-
-                    <div className="p-5 flex flex-col flex-grow">
-                        {/* Title */}
-                        <h3 className="text-lg font-bold text-apple-text mb-2 leading-tight group-hover:text-apple-blue transition-colors cursor-pointer" onClick={() => handleCardClick(idea)}>
-                            {idea.title}
-                        </h3>
-
-                        {/* Pain Summary */}
-                        <div className="flex-grow cursor-pointer" onClick={() => handleCardClick(idea)}>
-                            <p className="text-sm text-gray-500 font-light line-clamp-2 leading-relaxed">
-                                "{idea.pain}"
-                            </p>
-                        </div>
-
-                        {/* Video Preview - Renderizado se tiver vídeo (Grid Mode) */}
-                        {hasVideo && (
-                            <div className="mb-4 mt-3">
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
-                                    <Video className="w-3 h-3" /> Apresentação
-                                </div>
-                                <YouTubePreview url={videoUrl} />
-                            </div>
-                        )}
-
-                        {/* Footer: Votes & Action & Author */}
-                        <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
-                                    disabled={idea.hasVoted}
-                                    className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${idea.hasVoted
-                                        ? 'bg-orange-100 text-orange-600 cursor-default'
-                                        : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
-                                        }`}
-                                    title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
-                                >
-                                    <Flame className={`w-4 h-4 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
-                                    <span className="text-xs font-bold">{idea.votes_count}</span>
-                                </button>
-                                {renderAuthor()}
-                            </div>
-
-                            <button
-                                onClick={() => handleCardClick(idea)}
-                                className="text-xs font-semibold text-apple-blue hover:text-apple-blueHover flex items-center gap-1 group/btn"
-                            >
-                                Ver Detalhes
-                            </button>
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center transition-colors">
+                        <div className={`flex flex-col items-center gap-2 opacity-80 ${visuals.text} group-hover:scale-110 transition-transform duration-300`}>
+                            <VisualIcon className="w-10 h-10" strokeWidth={1.5} />
                         </div>
                     </div>
+                )}
+
+                {/* Gradient Overlay */}
+                <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-black/50 via-black/10 to-transparent z-10 pointer-events-none"></div>
+
+                {/* Overlaid Tags (LEFT SIDE) */}
+                <div className="absolute top-3 left-3 flex gap-2 z-20">
+                    {renderMonetizationBadge()}
+                    <span className="bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider shadow-sm border border-gray-200/50">
+                        {idea.niche}
+                    </span>
                 </div>
-                );
+
+                {/* Actions Top Right (RIGHT SIDE) */}
+                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+                    <ShareButton idea={idea} variant="card" />
+                    {isOwner && onDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(idea.id); }}
+                            className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-all border border-transparent hover:border-red-200"
+                            title="Excluir Projeto"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(idea.id); }}
+                        className="bg-white/90 backdrop-blur-md p-1.5 rounded-full text-gray-300 hover:text-red-500 shadow-sm transition-all"
+                    >
+                        <Heart className={`w-4 h-4 ${idea.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                    </button>
+                </div>
+            </div>
+
+            <div className="p-5 flex flex-col flex-grow">
+                {/* Title */}
+                <h3 className="text-lg font-bold text-apple-text mb-2 leading-tight group-hover:text-apple-blue transition-colors cursor-pointer" onClick={() => handleCardClick(idea)}>
+                    {idea.title}
+                </h3>
+
+                {/* Pain Summary */}
+                <div className="flex-grow cursor-pointer" onClick={() => handleCardClick(idea)}>
+                    <p className="text-sm text-gray-500 font-light line-clamp-2 leading-relaxed">
+                        "{idea.pain}"
+                    </p>
+                </div>
+
+                {/* Video Preview - Renderizado se tiver vídeo (Grid Mode) */}
+                {hasVideo && (
+                    <div className="mb-4 mt-3">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase mb-2">
+                            <Video className="w-3 h-3" /> Apresentação
+                        </div>
+                        <YouTubePreview url={videoUrl} />
+                    </div>
+                )}
+
+                {/* Footer: Votes & Action & Author */}
+                <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
+                            disabled={idea.hasVoted}
+                            className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${idea.hasVoted
+                                ? 'bg-orange-100 text-orange-600 cursor-default'
+                                : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
+                                }`}
+                            title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
+                        >
+                            <Flame className={`w-4 h-4 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
+                            <span className="text-xs font-bold">{idea.votes_count}</span>
+                        </button>
+                        {renderAuthor()}
+                    </div>
+
+                    <button
+                        onClick={() => handleCardClick(idea)}
+                        className="text-xs font-semibold text-apple-blue hover:text-apple-blueHover flex items-center gap-1 group/btn"
+                    >
+                        Ver Detalhes
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
-                export default IdeaCard;
+export default IdeaCard;
