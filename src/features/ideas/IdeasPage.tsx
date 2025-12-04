@@ -8,7 +8,7 @@ import NewIdeaModal from './NewIdeaModal';
 import NewProjectModal from './NewProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { IdeasListSkeleton } from '../../components/ui/LoadingStates';
-import { Plus, Search, Filter, ChevronLeft, ChevronRight, Grid, List, TrendingUp, Heart, Flame, X } from 'lucide-react';
+import { Plus, Search, Filter, ChevronLeft, ChevronRight, Grid, List, TrendingUp, Heart, Flame, X, FolderKanban } from 'lucide-react';
 import { useVoteIdea, useToggleFavorite, useJoinInterest, useAddImprovement, useSaveIdea } from '../../hooks/use-mutations';
 import { useCreateProject } from '../../hooks/useCreateProject';
 import { usePrefetch } from '../../hooks/use-prefetch';
@@ -267,7 +267,7 @@ const IdeasPage: React.FC = () => {
                         <div className="space-y-1">
                             <button onClick={() => setShowMostVotedOnly(!showMostVotedOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group ${showMostVotedOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>
                                 <span className="flex items-center gap-2">
-                                    <TrendingUp className={`w-4 h-4 ${showMostVotedOnly ? 'text-black' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                                    <Flame className={`w-4 h-4 ${showMostVotedOnly ? 'text-orange-500 fill-orange-500' : 'text-gray-400 group-hover:text-orange-400'}`} />
                                     Mais Votadas
                                 </span>
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${showMostVotedOnly ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>
@@ -286,7 +286,7 @@ const IdeasPage: React.FC = () => {
                             {session && (
                                 <button onClick={() => setShowMyIdeasOnly(!showMyIdeasOnly)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between group ${showMyIdeasOnly ? 'bg-gray-100 font-bold text-black' : 'text-gray-600 hover:bg-gray-50'}`}>
                                     <span className="flex items-center gap-2">
-                                        <Flame className={`w-4 h-4 ${showMyIdeasOnly ? 'text-orange-500 fill-orange-500' : 'text-gray-400 group-hover:text-orange-400'}`} />
+                                        <FolderKanban className={`w-4 h-4 ${showMyIdeasOnly ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
                                         Meus Projetos
                                     </span>
                                     <span className={`text-xs px-2 py-0.5 rounded-full ${showMyIdeasOnly ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>
