@@ -9,6 +9,7 @@ import { useNotifications } from '../../hooks/use-ideas-cache';
 import { CACHE_KEYS } from '../../lib/cache-keys';
 import { useQueryClient } from '@tanstack/react-query';
 import AuthModal from '../../features/auth/AuthModal';
+import { NPSModal } from '../../features/nps/NPSModal';
 
 export const Layout: React.FC = () => {
     const { session, userAvatar, signOut, isAdmin } = useAuth();
@@ -168,6 +169,9 @@ export const Layout: React.FC = () => {
             </main>
 
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+
+            {/* NPS Modal - Only for authenticated users */}
+            {session?.user?.id && <NPSModal userId={session.user.id} />}
         </div>
     );
 };
