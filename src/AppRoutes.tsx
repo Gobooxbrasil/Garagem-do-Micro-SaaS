@@ -2,7 +2,6 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { TelegramGuard } from './features/telegram/TelegramGuard';
 import { ActionLoader } from './components/ui/LoadingStates';
 import { useAuth } from './context/AuthProvider';
 
@@ -22,14 +21,12 @@ export const AppRoutes: React.FC = () => {
                 {/* Admin routes - NO LAYOUT, but protected */}
                 <Route path="/admin/*" element={
                     <ProtectedRoute>
-                        <TelegramGuard>
-                            <AdminPage />
-                        </TelegramGuard>
+                        <AdminPage />
                     </ProtectedRoute>
                 } />
 
                 {/* User routes - WITH LAYOUT */}
-                <Route path="/" element={<LayoutWrapper />}>
+                <Route path="/" element={<Layout />}>
                     <Route index element={<LandingPageWrapper />} />
 
                     {/* Public routes (Action-based auth) */}
@@ -38,12 +35,10 @@ export const AppRoutes: React.FC = () => {
                     <Route path="roadmap" element={<RoadmapPage />} />
                     <Route path="downloads" element={<DownloadsPage />} />
 
-                    {/* Protected routes - require authentication AND Telegram */}
+                    {/* Protected routes - require authentication */}
                     <Route path="profile" element={
                         <ProtectedRoute>
-                            <TelegramGuard>
-                                <ProfileView />
-                            </TelegramGuard>
+                            <ProfileView />
                         </ProtectedRoute>
                     } />
 
@@ -61,20 +56,5 @@ const LandingPageWrapper = () => {
         return <Navigate to="/ideas" replace />;
     }
     return <LandingPage />;
-};
-
-// Wrapper to apply TelegramGuard only for authenticated users
-const LayoutWrapper = () => {
-    const { session } = useAuth();
-
-    if (session) {
-        return (
-            <TelegramGuard>
-                <Layout />
-            </TelegramGuard>
-        );
-    }
-
-    return <Layout />;
 };
 
