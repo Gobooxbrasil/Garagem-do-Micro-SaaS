@@ -13,7 +13,7 @@ const TelegramBlockScreen: React.FC<TelegramBlockScreenProps> = ({ onValidate })
     const [showQrCode, setShowQrCode] = useState(false);
 
     const [qrCodeUrl, setQrCodeUrl] = useState('');
-    const { signOut } = useAuth();
+    const { signOut, user } = useAuth();
 
     const TELEGRAM_GROUP_LINK = 'https://t.me/microsaaspro';
 
@@ -163,12 +163,15 @@ const TelegramBlockScreen: React.FC<TelegramBlockScreenProps> = ({ onValidate })
                             </ul>
                         </div>
 
-                        <button
-                            onClick={signOut}
-                            className="mt-6 w-full text-center text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center gap-1"
-                        >
-                            <LogOut className="w-3 h-3" /> Sair da conta
-                        </button>
+                        <div className="mt-6 text-center">
+                            <p className="text-xs text-gray-500 mb-2">Logado como: <span className="font-semibold text-gray-700">{user?.email}</span></p>
+                            <button
+                                onClick={signOut}
+                                className="w-full text-center text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center gap-1"
+                            >
+                                <LogOut className="w-3 h-3" /> Sair da conta
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
