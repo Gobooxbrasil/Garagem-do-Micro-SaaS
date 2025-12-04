@@ -173,14 +173,19 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
                     )}
                 </div>
 
-                {/* Score */}
-                <div className="flex flex-col items-center min-w-[3rem] pt-1">
-                    <span className="text-xs font-bold text-gray-400 mb-1">Rank</span>
-                    <span className={`text-lg font-bold flex items-center gap-1 ${hasVotes ? 'text-orange-500' : 'text-gray-300'}`}>
-                        {idea.votes_count}
-                        <Flame className={`w-3 h-3 ${hasVotes ? 'fill-orange-500 animate-pulse' : 'text-gray-300'}`} />
-                    </span>
-                </div>
+                {/* Vote Button */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
+                    disabled={idea.hasVoted}
+                    className={`flex flex-col items-center min-w-[3.5rem] py-2 px-3 rounded-lg transition-all ${idea.hasVoted
+                            ? 'bg-orange-100 text-orange-600 cursor-default'
+                            : 'bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-orange-500 hover:border-orange-200'
+                        } border border-transparent`}
+                    title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
+                >
+                    <Flame className={`w-5 h-5 mb-1 ${hasVotes || idea.hasVoted ? 'fill-orange-500 text-orange-500' : 'text-gray-300'}`} />
+                    <span className="text-sm font-bold">{idea.votes_count}</span>
+                </button>
 
                 {/* Middle: Content */}
                 <div className="flex-grow min-w-0 border-l border-gray-100 pl-4">
@@ -192,12 +197,14 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
                         {idea.isFavorite && <Heart className="w-3 h-3 fill-red-500 text-red-500" />}
                     </div>
 
-                    <h3 className="text-base font-bold text-apple-text truncate">{idea.title}</h3>
+                    <h3 className="text-base font-bold text-apple-text mb-2 line-clamp-1">{idea.title}</h3>
 
-                    <div className="flex items-center gap-3 mt-1 mb-2">
-                        <p className="text-xs text-gray-500 truncate max-w-[250px]">{idea.pain}</p>
-                        <span className="text-gray-300 text-[10px]">•</span>
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3 leading-relaxed">{idea.pain}</p>
+
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
                         {renderAuthor()}
+                        <span>•</span>
+                        <span>{new Date(idea.created_at).toLocaleDateString()}</span>
                     </div>
 
                     {/* LÓGICA PRINCIPAL: PLAYER DE VÍDEO NO CORPO DO CARD */}
@@ -317,8 +324,8 @@ const IdeaCard: React.FC<IdeaCardProps> = ({ idea, onUpvote, onToggleFavorite, o
                             onClick={(e) => { e.stopPropagation(); onUpvote(idea.id); }}
                             disabled={idea.hasVoted}
                             className={`flex items-center gap-1.5 transition-colors px-2 py-1 rounded-lg ${idea.hasVoted
-                                    ? 'bg-orange-100 text-orange-600 cursor-default'
-                                    : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
+                                ? 'bg-orange-100 text-orange-600 cursor-default'
+                                : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-orange-500'
                                 }`}
                             title={idea.hasVoted ? "Você já votou" : "Votar nesta ideia"}
                         >

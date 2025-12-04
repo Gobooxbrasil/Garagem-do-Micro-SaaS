@@ -29,7 +29,7 @@ const IdeasPage: React.FC = () => {
     const [sortBy, setSortBy] = useState<'votes' | 'recent'>('recent');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(20);
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
     const [nicheSearchQuery, setNicheSearchQuery] = useState('');
 
     const [isIdeaModalOpen, setIsIdeaModalOpen] = useState(false);
