@@ -6,6 +6,7 @@ import RequestPixModal from '../../components/ui/RequestPixModal';
 import { PurchaseModal } from '../../components/ui/PurchaseModal';
 import { supabase } from '../../lib/supabaseClient';
 import { YouTubePreview, getYouTubeVideoId } from '../../components/ui/YouTubePreview';
+import { VideoModal } from '../../components/ui/VideoModal';
 import { useComments, useAddComment } from '../../hooks/use-comments';
 import CommentSection from '../../components/comments/CommentSection';
 import {
@@ -210,6 +211,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
     // Gallery States
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
 
     // Combine showroom image and additional images into one gallery array
     const galleryImages = React.useMemo(() => {
@@ -357,7 +359,7 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
 
     const openVideo = () => {
         if (youtubeId) {
-            window.open(`https://www.youtube.com/watch?v=${youtubeId}`, '_blank');
+            setIsVideoModalOpen(true);
         }
     };
 
@@ -713,6 +715,15 @@ const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                             </div>
                         )}
                     </div>
+                )}
+
+                {/* Video Modal */}
+                {youtubeId && (
+                    <VideoModal
+                        videoId={youtubeId}
+                        isOpen={isVideoModalOpen}
+                        onClose={() => setIsVideoModalOpen(false)}
+                    />
                 )}
             </div>
         </div>
