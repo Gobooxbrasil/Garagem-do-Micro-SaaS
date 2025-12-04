@@ -93,7 +93,7 @@ const LandingPage: React.FC = () => {
                         <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight">
                             Valide sua ideia{' '}
                             <br className="hidden sm:block" />
-                            antes de codar
+                            antes de desenvolver seu Micro SaaS
                         </h1>
 
                         {/* Subheadline */}
