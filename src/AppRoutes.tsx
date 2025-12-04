@@ -18,6 +18,9 @@ export const AppRoutes: React.FC = () => {
     return (
         <Suspense fallback={<ActionLoader message="Carregando..." />}>
             <Routes>
+                {/* Landing Page - NO LAYOUT */}
+                <Route path="/" element={<LandingPageWrapper />} />
+
                 {/* Admin routes - NO LAYOUT, but protected */}
                 <Route path="/admin/*" element={
                     <ProtectedRoute>
@@ -26,9 +29,7 @@ export const AppRoutes: React.FC = () => {
                 } />
 
                 {/* User routes - WITH LAYOUT */}
-                <Route path="/" element={<Layout />}>
-                    <Route index element={<LandingPageWrapper />} />
-
+                <Route element={<Layout />}>
                     {/* Public routes (Action-based auth) */}
                     <Route path="ideas" element={<IdeasPage />} />
                     <Route path="showroom" element={<ShowroomPage />} />
