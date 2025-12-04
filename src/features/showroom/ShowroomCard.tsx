@@ -76,19 +76,6 @@ export const ShowroomCard: React.FC<ShowroomCardProps> = ({ project, onClick, on
                         <Heart className={`w-4 h-4 ${project.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
                     </button>
                 </div>
-
-                {/* Play Button Overlay (Always Visible if Video Exists) */}
-                {hasVideo && (
-                    <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/20 hover:bg-black/40 transition-colors duration-300">
-                        <button
-                            onClick={handlePlay}
-                            className="bg-red-600 text-white w-14 h-14 rounded-full shadow-2xl hover:scale-110 transition-transform duration-300 flex items-center justify-center border-2 border-white/50 backdrop-blur-md group/play"
-                            title="Assistir Vídeo"
-                        >
-                            <Play className="w-7 h-7 fill-white ml-1" />
-                        </button>
-                    </div>
-                )}
             </div>
 
             {/* Content */}
