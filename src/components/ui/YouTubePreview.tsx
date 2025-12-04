@@ -71,11 +71,6 @@ export const YouTubePreview: React.FC<YouTubePreviewProps> = ({ url, className =
               <Play className="h-6 w-6 text-white fill-white ml-1" />
             </div>
           </div>
-
-          <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1.5 border border-white/10">
-            <Play className="h-2 w-2 fill-white" />
-            ASSISTIR
-          </div>
         </div>
       </div>
 
