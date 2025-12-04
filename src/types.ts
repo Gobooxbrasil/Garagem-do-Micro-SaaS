@@ -182,6 +182,13 @@ export interface UserProfile {
   blocked_at?: string;
   blocked_reason?: string;
   created_at?: string;
+
+  // Telegram Validation Fields
+  telegram_user_id?: string;
+  telegram_username?: string;
+  is_in_telegram_group?: boolean;
+  last_telegram_check_at?: string;
+  telegram_validated_at?: string;
 }
 
 // --- ROADMAP & FEEDBACK TYPES ---
