@@ -1,8 +1,7 @@
 
 import React, { useState } from 'react';
 import { useAdminUsers, useBlockUser, useUnblockUser, useToggleAdmin, useDeleteUser, useAdminUserDetails } from '../../hooks/use-admin';
-import { Search, Shield, Ban, CheckCircle, Trash2, Loader2, X, ShieldCheck, Eye, Calendar, Mail, MessageSquare, Flame, Layers, AlertTriangle, Send, RefreshCw } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
+import { Search, Shield, Ban, CheckCircle, Trash2, Loader2, X, ShieldCheck, Eye, Calendar, Mail, MessageSquare, Flame, Layers, AlertTriangle } from 'lucide-react';
 
 interface AdminUsersProps {
     session: any;
@@ -67,50 +66,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
         }
     };
 
-    const handleResetValidation = async (user: any) => {
-        if (!confirm(`Deseja resetar a validação do Telegram para ${user.full_name}? O usuário terá que validar novamente no próximo acesso.`)) return;
 
-        try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    telegram_validated_at: null,
-                    last_telegram_check_at: null,
-                    is_in_telegram_group: false
-                })
-                .eq('id', user.id);
-
-            if (error) throw error;
-            alert('Validação resetada com sucesso!');
-            window.location.reload();
-        } catch (err) {
-            console.error('Error resetting validation:', err);
-            alert('Erro ao resetar validação.');
-        }
-    };
-
-    const handleManualValidate = async (user: any) => {
-        if (!confirm(`Deseja VALIDAR MANUALMENTE o acesso de ${user.full_name}? Isso liberará o acesso à plataforma sem checagem do Telegram.`)) return;
-
-        try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    telegram_validated_at: new Date().toISOString(),
-                    last_telegram_check_at: new Date().toISOString(),
-                    is_in_telegram_group: true,
-                    telegram_user_id: 'manual_override_admin'
-                })
-                .eq('id', user.id);
-
-            if (error) throw error;
-            alert('Usuário validado manualmente com sucesso!');
-            window.location.reload();
-        } catch (err) {
-            console.error('Error manually validating:', err);
-            alert('Erro ao validar manualmente.');
-        }
-    };
 
     const openDetails = (user: any) => {
         setSelectedUser(user);
@@ -154,16 +110,15 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Usuário</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Email / Contato</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Status</th>
-                                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-center">Telegram</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Cadastro</th>
                                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                             {isLoading ? (
-                                <tr><td colSpan={6} className="p-12 text-center text-zinc-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />Carregando usuários...</td></tr>
+                                <tr><td colSpan={5} className="p-12 text-center text-zinc-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />Carregando usuários...</td></tr>
                             ) : users?.length === 0 ? (
-                                <tr><td colSpan={6} className="p-12 text-center text-zinc-500">Nenhum usuário encontrado.</td></tr>
+                                <tr><td colSpan={5} className="p-12 text-center text-zinc-500">Nenhum usuário encontrado.</td></tr>
                             ) : users?.map((user) => (
                                 <tr key={user.id} className="hover:bg-zinc-50 transition-colors group">
                                     <td className="px-6 py-4">
@@ -201,27 +156,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
                                             <p className="text-[10px] text-red-500 mt-1 max-w-[150px] truncate" title={user.blocked_reason}>{user.blocked_reason}</p>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-center">
-                                        {user.telegram_validated_at ? (
-                                            <div className="flex items-center justify-center gap-2 group/telegram relative">
-                                                <CheckCircle className="w-5 h-5 text-green-600" />
-                                                <div className="absolute bottom-full mb-2 hidden group-hover/telegram:block bg-zinc-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-10">
-                                                    <div className="font-bold mb-1">✅ Validado no Telegram</div>
-                                                    <div className="text-zinc-300">Primeira validação: {new Date(user.telegram_validated_at).toLocaleDateString()}</div>
-                                                    {user.last_telegram_check_at && (
-                                                        <div className="text-zinc-300">Último check: {new Date(user.last_telegram_check_at).toLocaleDateString()}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center justify-center gap-2 group/telegram relative">
-                                                <X className="w-5 h-5 text-red-600" />
-                                                <div className="absolute bottom-full mb-2 hidden group-hover/telegram:block bg-zinc-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-10">
-                                                    <div className="font-bold">❌ Não validado</div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </td>
                                     <td className="px-6 py-4 text-sm text-zinc-500 whitespace-nowrap">
                                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
                                     </td>
@@ -247,24 +181,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ session }) => {
                                                 <button onClick={() => handleUnblock(user.id)} className="p-2 text-green-600 hover:bg-green-100 rounded-lg" title="Desbloquear"><CheckCircle className="w-4 h-4" /></button>
                                             ) : (
                                                 <button onClick={() => { setSelectedUser(user); setBlockModalOpen(true); }} className="p-2 text-orange-500 hover:bg-orange-100 rounded-lg" title="Bloquear Acesso"><Ban className="w-4 h-4" /></button>
-                                            )}
-
-                                            <button
-                                                onClick={() => handleResetValidation(user)}
-                                                className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg"
-                                                title="Resetar Validação Telegram"
-                                            >
-                                                <RefreshCw className="w-4 h-4" />
-                                            </button>
-
-                                            {!user.telegram_validated_at && (
-                                                <button
-                                                    onClick={() => handleManualValidate(user)}
-                                                    className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
-                                                    title="Validar Manualmente (Override)"
-                                                >
-                                                    <ShieldCheck className="w-4 h-4" />
-                                                </button>
                                             )}
 
                                             <button onClick={() => handleDelete(user)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg ml-2" title="Excluir Usuário (Cuidado!)"><Trash2 className="w-4 h-4" /></button>
