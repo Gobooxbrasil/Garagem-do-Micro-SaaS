@@ -1,7 +1,8 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { MaintenanceGuard } from './components/MaintenanceGuard';
 import { ActionLoader } from './components/ui/LoadingStates';
 import { useAuth } from './context/AuthProvider';
 
@@ -18,33 +19,39 @@ export const AppRoutes: React.FC = () => {
     return (
         <Suspense fallback={<ActionLoader message="Carregando..." />}>
             <Routes>
-                {/* Landing Page - NO LAYOUT */}
-                <Route path="/" element={<LandingPageWrapper />} />
-
-                {/* Admin routes - NO LAYOUT, but protected */}
+                {/* Admin routes - NO LAYOUT, but protected (Bypasses Maintenance Check internally via ProtectedRoute+Admin check, but we can leave it unwrapped for safety or wrap it. 
+                    Let's leave it unwrapped here so admins can ALWAYS access admin panel even if Guard breaks, 
+                    although Guard has admin bypass logic. 
+                */}
                 <Route path="/admin/*" element={
                     <ProtectedRoute>
                         <AdminPage />
                     </ProtectedRoute>
                 } />
 
-                {/* User routes - WITH LAYOUT */}
-                <Route element={<Layout />}>
-                    {/* Public routes (Action-based auth) */}
-                    <Route path="ideas" element={<IdeasPage />} />
-                    <Route path="showroom" element={<ShowroomPage />} />
-                    <Route path="roadmap" element={<RoadmapPage />} />
-                    <Route path="downloads" element={<DownloadsPage />} />
+                {/* Public & App Routes - Wrapped in MaintenanceGuard */}
+                <Route element={<MaintenanceGuard><Outlet /></MaintenanceGuard>}>
+                    {/* Landing Page */}
+                    <Route path="/" element={<LandingPageWrapper />} />
 
-                    {/* Protected routes - require authentication */}
-                    <Route path="profile" element={
-                        <ProtectedRoute>
-                            <ProfileView />
-                        </ProtectedRoute>
-                    } />
+                    {/* User routes - WITH LAYOUT */}
+                    <Route element={<Layout />}>
+                        {/* Public routes (Action-based auth) */}
+                        <Route path="ideas" element={<IdeasPage />} />
+                        <Route path="showroom" element={<ShowroomPage />} />
+                        <Route path="roadmap" element={<RoadmapPage />} />
+                        <Route path="downloads" element={<DownloadsPage />} />
 
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                        {/* Protected routes - require authentication */}
+                        <Route path="profile" element={
+                            <ProtectedRoute>
+                                <ProfileView />
+                            </ProtectedRoute>
+                        } />
+                    </Route>
                 </Route>
+
+                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </Suspense>
     );
